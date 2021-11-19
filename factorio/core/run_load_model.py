@@ -38,6 +38,7 @@ if __name__ == '__main__':
     if not args.config.exists():
         raise argparse.ArgumentError(path_parser, f"Config file doesn't exist! Invalid path: {args.config} "
                                                   f"to config.ini file, please check it!")
+    load_path = args.input
 
     hack_config = data_loader.HackConfig.from_config(args.config)
     data = data_loader.load_data(hack_config.z_case)
@@ -51,22 +52,9 @@ if __name__ == '__main__':
     ], dim=-1)
     model = RateGPpl(inducing_points=my_inducing_pts,
                      num_particles=num_particles)
-    loaded_state_dict = torch.load('model_state.pth')
+    loaded_state_dict = torch.load(load_path)
     model.load_state_dict(loaded_state_dict)
-    loader = DataLoader(
-        dfactory.dset,
-        batch_size=loader_batch_size,
-        shuffle=True
-    )
-
-    fit(model,
-        train_dataloader=loader,
-        max_epochs=num_iter,
-        patience=10,
-        verbose=False,
-        enable_checkpointing=slow_mode,
-        enable_logger=True)
-
+    
     test_x = dfactory.dset[-1000:][0]
     Y = dfactory.dset[-1000:][1]
     model.eval()
