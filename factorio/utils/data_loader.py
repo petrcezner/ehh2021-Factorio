@@ -38,7 +38,7 @@ class DataFactory:
         hour_rate['timedelta'] = np.linspace(0, 1000, hour_rate.shape[0])
         weather_tensor = self.load_weather(pd.to_datetime(hour_rate.index.values[-1]))
         x = torch.cat([torch.as_tensor(hour_rate['timedelta'].values).unsqueeze(1), weather_tensor], dim=1).to(dtype=dtype)
-        y = torch.as_tensor(hour_rate['cases'].values).unsqueeze(1).to(dtype=dtype)
+        y = torch.as_tensor(hour_rate['cases'].values).to(dtype=dtype)
         return TensorDataset(x, y)
 
     def load_weather(self, end_date):
