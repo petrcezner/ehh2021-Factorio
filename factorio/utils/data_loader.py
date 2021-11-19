@@ -8,6 +8,10 @@ import pandas as pd
 import torch
 from torch.utils.data import TensorDataset
 
+import os
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 
 class DataLoader:
     def __init__(self, data, data_frequency):
@@ -28,8 +32,6 @@ class DataLoader:
         time_data.set_index('ambulanceLocation__first__dispatchingEtaTs', inplace=True, drop=True)
         hour_rate = time_data.resample(f'{data_frequency}min').count()
         hour_rate['timedelta'] = np.linspace(0, 1000, hour_rate.shape[0])
-        hour_rate['cases'].plot()
-        plt.show()
         return TensorDataset(torch.as_tensor(hour_rate['timedelta'].values),
                              torch.as_tensor(hour_rate['cases'].values))
 
