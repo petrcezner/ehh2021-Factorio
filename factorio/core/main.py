@@ -20,11 +20,11 @@ if __name__ == '__main__':
 
     # Move to config at some point
     dtype = torch.float
-    num_inducing = 5
-    num_iter = 1
-    num_particles = 4
+    num_inducing = 256
+    num_iter = 1000
+    num_particles = 32
     loader_batch_size = 512
-    slow_mode = False  # enables checkpointing and logging
+    slow_mode = True  # enables checkpointing and logging
 
     time_now = datetime.datetime.utcnow()
     parser = argparse.ArgumentParser()
