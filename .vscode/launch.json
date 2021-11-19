@@ -17,7 +17,7 @@
             "request": "launch",
             "program": "factorio/core/main.py",
             "console": "integratedTerminal",
-            "args": ["-c", "mnt/config.ini"]
+            "args": ["-c", "mnt/config.ini", "-o", "mnt/mdl.pth"]
         }
     ]
 }

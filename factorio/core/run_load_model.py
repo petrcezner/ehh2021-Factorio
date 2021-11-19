@@ -20,8 +20,8 @@ if __name__ == '__main__':
 
     # Move to config at some point
     dtype = torch.float
-    num_inducing = 32
-    num_iter = 1
+    num_inducing = 256
+    num_iter = 1000
     num_particles = 32
     loader_batch_size = 512
     slow_mode = True  # enables checkpointing and logging
@@ -31,14 +31,11 @@ if __name__ == '__main__':
 
     path_parser = parser.add_argument('-c', '--config', type=Path, default='config.ini',
                                       help='Set path to your config.ini file.')
-    path_parser = parser.add_argument('-o', '--output', type=Path, default='mnt/model_state.pth',
-                                      help='Set path to your config.ini file.')
 
     args = parser.parse_args()
     if not args.config.exists():
         raise argparse.ArgumentError(path_parser, f"Config file doesn't exist! Invalid path: {args.config} "
                                                   f"to config.ini file, please check it!")
-    output_path = args.output
 
     hack_config = data_loader.HackConfig.from_config(args.config)
     data = data_loader.load_data(hack_config.z_case)
@@ -52,6 +49,8 @@ if __name__ == '__main__':
     ], dim=-1)
     model = RateGPpl(inducing_points=my_inducing_pts,
                      num_particles=num_particles)
+    loaded_state_dict = torch.load
+    model.load_state_dict(loaded_state_dict)
     loader = DataLoader(
         dfactory.dset,
         batch_size=loader_batch_size,
@@ -65,9 +64,6 @@ if __name__ == '__main__':
         verbose=False,
         enable_checkpointing=slow_mode,
         enable_logger=True)
-    
-    torch.save(model.state_dict(), output_path)
-
 
     test_x = dfactory.dset[-1000:][0]
     Y = dfactory.dset[-1000:][1]
