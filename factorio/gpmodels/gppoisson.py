@@ -14,19 +14,13 @@ from tqdm import trange
 
 class RateGP(gpytorch.models.ApproximateGP):
     def __init__(self,
-                 num_inducing=64,
-                 time_range: Tuple[float, float] = None,
+                 inducing_points: torch.Tensor,
                  name_prefix="rate_exact_gp",
                  learn_inducing_locations = False,
                  lb_periodicity = 0):
         self.name_prefix = name_prefix
-        if time_range is None:
-            time_range = (0, 1)
         # Define all the variational stuff
-        inducing_points = torch.stack([
-                torch.linspace(time_range[0], time_range[1], num_inducing),
-                torch.randn(num_inducing)
-        ], dim=-1)
+        num_inducing = inducing_points.size(0)
         variational_dist = CholeskyVariationalDistribution(num_inducing_points=num_inducing)
         variational_strategy = VariationalStrategy(
             self, inducing_points,
@@ -170,7 +164,11 @@ if __name__ == '__main__':
     ax_sample.set_title('Observations with Noise')
     plt.show()
 
-    model = RateGP(num_inducing=128, time_range=time_range)
+    my_inducing_pts = torch.stack([
+                torch.linspace(time_range[0], time_range[1], 32),
+                torch.randn(32)
+        ], dim=-1)
+    model = RateGP(inducing_points=my_inducing_pts)
     model.fit(X, Y, num_iter=1000, num_particles=64)
 
     # define test set (optionally on GPU)
