@@ -17,11 +17,11 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
 class DataFactory:
-    def __init__(self, data, data_frequency):
+    def __init__(self, data, data_frequency, dtype=torch.float):
         self.scaler = MinMaxScaler()
-        self.dset = self.create_timestamp(data, data_frequency)
+        self.dset = self.create_timestamp(data, data_frequency, dtype=dtype)
 
-    def create_timestamp(self, data, data_frequency):
+    def create_timestamp(self, data, data_frequency, dtype=torch.float):
         data_ikem = data[data['destination__hospitalId'] == 'hospital:IKEM']
         cols = ['createdTs', 'closedTs', 'ambulanceLocation__first__dispatchingEtaTs', 'dispatchingTs']
         for col in cols:
@@ -37,9 +37,9 @@ class DataFactory:
         hour_rate = time_data.resample(f'{data_frequency}min').count().loc[datetime.datetime(2020, 8, 31):]
         hour_rate['timedelta'] = np.linspace(0, 1000, hour_rate.shape[0])
         weather_tensor = self.load_weather(pd.to_datetime(hour_rate.index.values[-1]))
-        x = torch.cat([torch.as_tensor(hour_rate['timedelta'].values).unsqueeze(1), weather_tensor], dim=1)
-        return TensorDataset(x.unsqueeze(1),
-                             torch.as_tensor(hour_rate['cases'].values).unsqueeze(1))
+        x = torch.cat([torch.as_tensor(hour_rate['timedelta'].values).unsqueeze(1), weather_tensor], dim=1).to(dtype=dtype)
+        y = torch.as_tensor(hour_rate['cases'].values).unsqueeze(1).to(dtype=dtype)
+        return TensorDataset(x, y)
 
     def load_weather(self, end_date):
         historical_weather = HistoricalWeather()
@@ -53,7 +53,7 @@ class DataFactory:
         return torch.as_tensor(transformed_values)
 
     def get_min_max(self):
-        return self.dset[:][0].max(dim=0)[0].tolist()[0], self.dset[:][0].min(dim=0)[0].tolist()[0]
+        return self.dset[:][0].min(dim=0)[0].tolist(), self.dset[:][0].max(dim=0)[0].tolist()
 
     def inverse_transform(self, X: torch.Tensor):
         return self.scaler.inverse_transform(X.numpy())
