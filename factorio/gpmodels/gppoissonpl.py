@@ -86,7 +86,7 @@ def fit(module,
             save_top_k=1,
             mode='min',
         )
-        callbacks += checkpoint_callback
+        callbacks += [checkpoint_callback]
 
     # trainer = pl.Trainer(gpus=8) (if you have GPUs)
     trainer = Trainer(
@@ -102,6 +102,7 @@ def fit(module,
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
+    from factorio.utils.helpers import percentiles_from_samples
 
     print(f'Run {__file__}')
 
@@ -174,15 +175,12 @@ if __name__ == '__main__':
     with torch.no_grad():
         output = model(test_x)
 
-    # Get E[exp(f)] via f_i ~ GP, 1/n \sum_{i=1}^{n} exp(f_i).
     # Similarly get the 5th and 95th percentiles
     samples = output(torch.Size([1000]))
-    lower, fn_mean, upper = RateGP.percentiles_from_samples(samples)
+    lower, fn_mean, upper = percentiles_from_samples(samples)
 
-    y_sim_lower, y_sim_mean, y_sim_upper = RateGP.percentiles_from_samples(
+    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(
         Poisson(samples.exp()).sample())
-
-    # y_sim = obs_fn(fn_mean)
 
     # visualize the result
     fig, (ax_func, ax_samp) = plt.subplots(1, 2, figsize=(12, 3))
@@ -193,15 +191,13 @@ if __name__ == '__main__':
         upper.detach().cpu().numpy(), color=line[0].get_color(), alpha=0.5
     )
 
-    # func.plot(test_x, lat_fn(test_x), label='True latent function')
     ax_func.legend()
 
     # sample from p(y|D,x) = \int p(y|f) p(f|D,x) df (doubly stochastic)
     ax_samp.scatter(X[:, 0], Y, alpha=0.5,
                     label='True train data', color='orange')
     # ax_samp.plot(test_x[:, 0], y_sim.cpu().detach(), alpha=0.5, label='Mean from the model')
-    y_sim_plt = ax_samp.plot(test_x[:, 0], y_sim_mean.cpu(
-    ).detach(), alpha=0.5, label='Sample from the model')
+    y_sim_plt = ax_samp.plot(test_x[:, 0], y_sim_mean.cpu().detach(), alpha=0.5, label='Sample from the model')
     ax_samp.fill_between(
         test_x[:, 0], y_sim_lower.detach().cpu(),
         y_sim_upper.detach().cpu(), color=y_sim_plt[0].get_color(), alpha=0.5
