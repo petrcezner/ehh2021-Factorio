@@ -38,10 +38,10 @@ class DataFactory:
         time_data.set_index('ambulanceLocation__first__dispatchingEtaTs', inplace=True, drop=True)
         hour_rate = time_data.resample(f'{data_frequency}min').count().loc[datetime.datetime(2020, 8, 31):]
         # hour_rate['timedelta'] = np.linspace(0, 1000, hour_rate.shape[0])
-        x = self.load_weather(pd.to_datetime(hour_rate.index.values[-1]))
+        x = self.load_weather(pd.to_datetime(hour_rate.index.values[-1])).to(dtype=dtype)
         # x = torch.cat([torch.as_tensor(hour_rate['timedelta'].values).unsqueeze(1), x], dim=1)
-        return TensorDataset(x.unsqueeze(1),
-                             torch.as_tensor(hour_rate['cases'].values).unsqueeze(1))
+        y = torch.as_tensor(hour_rate['cases'].values).to(dtype=dtype)
+        return TensorDataset(x, y)
 
     def load_weather(self, end_date):
         historical_weather = HistoricalWeather()
