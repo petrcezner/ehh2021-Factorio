@@ -22,6 +22,7 @@ class RateGP(gpytorch.models.ApproximateGP):
         self.name_prefix = name_prefix
         # Define all the variational stuff
         num_inducing = inducing_points.size(0)
+        ard_num_dims = inducing_points.size(1)
         variational_dist = CholeskyVariationalDistribution(num_inducing_points=num_inducing)
         variational_strategy = VariationalStrategy(
             self, inducing_points,
@@ -33,10 +34,10 @@ class RateGP(gpytorch.models.ApproximateGP):
         super().__init__(variational_strategy)
 
         # Mean, covar, likelihood
-        self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.MaternKernel(nu=1.5))\
-            + gpytorch.kernels.ScaleKernel(gpytorch.kernels.PeriodicKernel(
-                period_length_constraint= gpytorch.constraints.GreaterThan(lb_periodicity)))
+        self.mean_module = gpytorch.means.ConstantMean(ard_num_dims=ard_num_dims)
+        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.MaternKernel(nu=1.5, ard_num_dims=ard_num_dims)) #\
+            # + gpytorch.kernels.ScaleKernel(gpytorch.kernels.PeriodicKernel(
+            #     period_length_constraint= gpytorch.constraints.GreaterThan(lb_periodicity)))
 
     def forward(self, x):
         mean = self.mean_module(x)
