@@ -55,6 +55,9 @@ class DataFactory:
     def get_min_max(self):
         return self.dset[:][0].max(dim=0)[0].tolist()[0], self.dset[:][0].min(dim=0)[0].tolist()[0]
 
+    def inverse_transform(self, X: torch.Tensor):
+        return self.scaler.inverse_transform(X.numpy())
+
 
 def load_data(data_path):
     data = pd.read_json(data_path, lines=True)
