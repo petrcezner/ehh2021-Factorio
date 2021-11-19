@@ -1,0 +1,34 @@
+import configparser
+from pathlib import Path
+
+
+class HackConfig:
+    def __init__(self, z_case, data_frequency, trials, inter_trials, experiment_name, valid_size, use_gpu):
+        self.z_case = z_case
+        self.data_frequency = data_frequency
+        self.trials = trials
+        self.inter_trials = inter_trials
+        self.experiment_name = experiment_name
+        self.valid_size = valid_size
+        self.use_gpu = use_gpu
+
+    @classmethod
+    def from_config(cls, config_file):
+        config = configparser.ConfigParser()
+        config.read(config_file)
+
+        z_case = Path(config['IKEM'].get('data_path'))
+        data_frequency = config['IKEM'].getint('data_frequency', fallback=60)
+
+        trials = config['ax'].getint('trials', fallback=10)
+        inter_trials = config['ax'].getint('inter_trials', fallback=10)
+        valid_size = config['ax'].getint('valid_size', fallback=10)
+        experiment_name = config['ax'].get('experiment_name', fallback='test')
+        use_gpu = config['ax'].getboolean('use_gpu', fallback=False)
+
+        return cls(z_case=z_case,
+                   data_frequency=data_frequency,
+                   trials=trials,
+                   inter_trials=inter_trials,
+                   valid_size=valid_size,
+                   experiment_name=experiment_name, use_gpu=use_gpu)
