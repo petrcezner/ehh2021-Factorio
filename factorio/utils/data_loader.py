@@ -15,7 +15,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 class DataFactory:
     def __init__(self, data, data_frequency):
-        self.data = self.create_timestamp(data, data_frequency)
+        self.dset = self.create_timestamp(data, data_frequency)
 
     def create_timestamp(self, data, data_frequency):
         data_ikem = data[data['destination__hospitalId'] == 'hospital:IKEM']
