@@ -13,7 +13,7 @@ import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
-class DataLoader:
+class DataFactory:
     def __init__(self, data, data_frequency):
         self.data = self.create_timestamp(data, data_frequency)
 
@@ -74,4 +74,4 @@ if __name__ == '__main__':
 
     hack_config = HackConfig.from_config(args.config)
     data = load_data(hack_config.z_case)
-    data_loader = DataLoader(data, hack_config.data_frequency)
+    data_loader = DataFactory(data, hack_config.data_frequency)
