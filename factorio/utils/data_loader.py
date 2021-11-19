@@ -6,15 +6,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import TensorDataset
 
 import os
+
+from factorio.weather import ActualWeather, HistoricalWeather
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
 class DataFactory:
     def __init__(self, data, data_frequency):
+        self.scaler = MinMaxScaler()
         self.dset = self.create_timestamp(data, data_frequency)
 
     def create_timestamp(self, data, data_frequency):
@@ -30,10 +34,29 @@ class DataFactory:
             if row['ambulanceLocation__first__dispatchingEtaTs'] is pd.NaT:
                 time_data.loc[i, 'ambulanceLocation__first__dispatchingEtaTs'] = time_data.loc[i, 'dispatchingTs']
         time_data.set_index('ambulanceLocation__first__dispatchingEtaTs', inplace=True, drop=True)
-        hour_rate = time_data.resample(f'{data_frequency}min').count()
+        hour_rate = time_data.resample(f'{data_frequency}min').count().loc[datetime.datetime(2020, 8, 31):]
         hour_rate['timedelta'] = np.linspace(0, 1000, hour_rate.shape[0])
-        return TensorDataset(torch.as_tensor(hour_rate['timedelta'].values),
-                             torch.as_tensor(hour_rate['cases'].values))
+        weather_tensor = self.load_weather(pd.to_datetime(hour_rate.index.values[-1]))
+        x = torch.cat([torch.as_tensor(hour_rate['timedelta'].values).unsqueeze(1), weather_tensor], dim=1)
+        return TensorDataset(x.unsqueeze(1),
+                             torch.as_tensor(hour_rate['cases'].values).unsqueeze(1))
+
+    def load_weather(self, end_date):
+        historical_weather = HistoricalWeather()
+
+        start_date = datetime.datetime(2020, 8, 31)
+        data = historical_weather.get_temperature(start_date, end_date)
+        data.fillna(0, inplace=True)
+
+        self.scaler.fit(data.values)
+        transformed_values = self.scaler.transform(data.values)
+        return torch.as_tensor(transformed_values)
+
+    def get_min_max(self):
+        return self.dset[:][0].max(dim=0)[0].tolist()[0], self.dset[:][0].min(dim=0)[0].tolist()[0]
+
+    def inverse_transform(self, X: torch.Tensor):
+        return self.scaler.inverse_transform(X.numpy())
 
 
 def load_data(data_path):
@@ -73,5 +96,6 @@ if __name__ == '__main__':
                                                   f"to config.ini file, please check it!")
 
     hack_config = HackConfig.from_config(args.config)
-    data = load_data(hack_config.z_case)
-    data_loader = DataFactory(data, hack_config.data_frequency)
+    data_ = load_data(hack_config.z_case)
+    data_loader = DataFactory(data_, hack_config.data_frequency)
+    print(data_loader.get_min_max())
