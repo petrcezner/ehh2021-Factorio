@@ -1,7 +1,9 @@
 import configparser
 import datetime
 from pathlib import Path
+import warnings
 
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -25,19 +27,19 @@ class DataFactory:
         data_ikem = data[data['destination__hospitalId'] == 'hospital:IKEM']
         cols = ['createdTs', 'closedTs', 'ambulanceLocation__first__dispatchingEtaTs', 'dispatchingTs']
         for col in cols:
-            data_ikem[col] = pd.to_datetime(data_ikem[col])
+            data_ikem.loc[:, col] = pd.to_datetime(data_ikem[col])
         time_data = data_ikem[cols + ['ambulanceLocation__first__dispatchingEtaTs__minutes']]
         time_data.reset_index(drop=True, inplace=True)
         tmp_array = np.full((time_data.shape[0], 1), 0)
-        time_data['cases'] = tmp_array
+        time_data.insert(0, 'cases', tmp_array)
         for i, row in time_data.iterrows():
             if row['ambulanceLocation__first__dispatchingEtaTs'] is pd.NaT:
                 time_data.loc[i, 'ambulanceLocation__first__dispatchingEtaTs'] = time_data.loc[i, 'dispatchingTs']
         time_data.set_index('ambulanceLocation__first__dispatchingEtaTs', inplace=True, drop=True)
         hour_rate = time_data.resample(f'{data_frequency}min').count().loc[datetime.datetime(2020, 8, 31):]
-        hour_rate['timedelta'] = np.linspace(0, 1000, hour_rate.shape[0])
-        weather_tensor = self.load_weather(pd.to_datetime(hour_rate.index.values[-1]))
-        x = torch.cat([torch.as_tensor(hour_rate['timedelta'].values).unsqueeze(1), weather_tensor], dim=1)
+        # hour_rate['timedelta'] = np.linspace(0, 1000, hour_rate.shape[0])
+        x = self.load_weather(pd.to_datetime(hour_rate.index.values[-1]))
+        # x = torch.cat([torch.as_tensor(hour_rate['timedelta'].values).unsqueeze(1), x], dim=1)
         return TensorDataset(x.unsqueeze(1),
                              torch.as_tensor(hour_rate['cases'].values).unsqueeze(1))
 
@@ -47,7 +49,9 @@ class DataFactory:
         start_date = datetime.datetime(2020, 8, 31)
         data = historical_weather.get_temperature(start_date, end_date)
         data.fillna(0, inplace=True)
-
+        data.insert(0, 'hour', data.index.hour)
+        data.insert(1, 'day in month', data.index.day)
+        data.insert(2, 'month', data.index.month)
         self.scaler.fit(data.values)
         transformed_values = self.scaler.transform(data.values)
         return torch.as_tensor(transformed_values)
