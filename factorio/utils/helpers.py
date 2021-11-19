@@ -1,6 +1,7 @@
 import re
 from collections import Iterable
 from threading import Timer
+from functools import reduce
 
 import gpytorch
 from gpytorch.kernels import ScaleKernel, MaternKernel, RBFKernel, RQKernel, PeriodicKernel, SpectralMixtureKernel, \
@@ -77,15 +78,15 @@ def get_kernel_by_name(ker_name: str, ard_num_dims: int = 1):
 def timeseries_split(dataset: Dataset,
                      ratios: Iterable = None,
                      valid_size: int = 1,
-                     train_days=0):
+                     train_samples=0):
     if ratios is None:
         ratios = [0.5]
     length = len(dataset)
     parts = set([int(r * length) for r in ratios])
-    parts = [part for part in parts if part + valid_size <= length and part - train_days >= 0]
+    parts = [part for part in parts if part + valid_size <= length and part - train_samples >= 0]
     parts.sort()
     tr_val_tuples = [
-        (Subset(dataset, range(part - train_days, part)),
+        (Subset(dataset, range(part - train_samples, part)),
          Subset(dataset, range(part, part + valid_size)))
         for part in parts
     ]

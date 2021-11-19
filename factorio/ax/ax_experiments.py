@@ -49,9 +49,10 @@ class ExperimentHolder(AxClient):
             self._can_move_on = False
         return self.current_pars
 
-    def complete_trial(self, score):
+    def complete_trial(self):
         if not self._can_move_on:
             # TODO: call problem function
+            score = 1
             score_dict = {'score': score}
             super().complete_trial(trial_index=self.current_trial_index,
                                    raw_data=score_dict)
