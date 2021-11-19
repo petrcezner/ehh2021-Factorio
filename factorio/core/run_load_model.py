@@ -31,6 +31,8 @@ if __name__ == '__main__':
 
     path_parser = parser.add_argument('-c', '--config', type=Path, default='config.ini',
                                       help='Set path to your config.ini file.')
+    path_parser = parser.add_argument('-i', '--input', type=Path, default='mnt/model_state.pth',
+                                      help='Set path to save trained model.')
 
     args = parser.parse_args()
     if not args.config.exists():
@@ -49,7 +51,7 @@ if __name__ == '__main__':
     ], dim=-1)
     model = RateGPpl(inducing_points=my_inducing_pts,
                      num_particles=num_particles)
-    loaded_state_dict = torch.load
+    loaded_state_dict = torch.load('model_state.pth')
     model.load_state_dict(loaded_state_dict)
     loader = DataLoader(
         dfactory.dset,
