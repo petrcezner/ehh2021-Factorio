@@ -5,6 +5,7 @@ import pyro.distributions as dist
 import torch
 from torch.distributions.poisson import Poisson
 from torch.utils.data import TensorDataset, DataLoader
+from factorio.utils.helpers import percentiles_from_samples
 import pyro
 import gpytorch
 from gpytorch.variational import CholeskyVariationalDistribution
@@ -14,19 +15,14 @@ from tqdm import trange
 
 class RateGP(gpytorch.models.ApproximateGP):
     def __init__(self,
-                 num_inducing=64,
-                 time_range: Tuple[float, float] = None,
+                 inducing_points: torch.Tensor,
                  name_prefix="rate_exact_gp",
                  learn_inducing_locations = False,
                  lb_periodicity = 0):
         self.name_prefix = name_prefix
-        if time_range is None:
-            time_range = (0, 1)
         # Define all the variational stuff
-        inducing_points = torch.stack([
-                torch.linspace(time_range[0], time_range[1], num_inducing),
-                torch.randn(num_inducing)
-        ], dim=-1)
+        num_inducing = inducing_points.size(0)
+        ard_num_dims = inducing_points.size(1)
         variational_dist = CholeskyVariationalDistribution(num_inducing_points=num_inducing)
         variational_strategy = VariationalStrategy(
             self, inducing_points,
@@ -38,10 +34,10 @@ class RateGP(gpytorch.models.ApproximateGP):
         super().__init__(variational_strategy)
 
         # Mean, covar, likelihood
-        self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.MaternKernel(nu=1.5))\
-            + gpytorch.kernels.ScaleKernel(gpytorch.kernels.PeriodicKernel(
-                period_length_constraint= gpytorch.constraints.GreaterThan(lb_periodicity)))
+        self.mean_module = gpytorch.means.ConstantMean(ard_num_dims=ard_num_dims)
+        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.MaternKernel(nu=1.5, ard_num_dims=ard_num_dims)) #\
+            # + gpytorch.kernels.ScaleKernel(gpytorch.kernels.PeriodicKernel(
+            #     period_length_constraint= gpytorch.constraints.GreaterThan(lb_periodicity)))
 
     def forward(self, x):
         mean = self.mean_module(x)
@@ -117,24 +113,6 @@ class RateGP(gpytorch.models.ApproximateGP):
                     # lengthscale=self.covar_module.base_kernel.lengthscale.item(),
                     )
 
-    # Here's a quick helper function for getting smoothed percentile values from samples
-    @staticmethod
-    def percentiles_from_samples(samples, percentiles=[0.05, 0.5, 0.95]):
-        num_samples = samples.size(0)
-        samples = samples.sort(dim=0)[0]
-
-        # Get samples corresponding to percentile
-        percentile_samples = [samples[int(num_samples * percentile)] for percentile in percentiles]
-
-        # Smooth the samples
-        kernel = torch.full((1, 1, 5), fill_value=0.2)
-        percentiles_samples = [
-            torch.nn.functional.conv1d(percentile_sample.view(1, 1, -1), kernel, padding=2).view(-1)
-            for percentile_sample in percentile_samples
-        ]
-
-        return percentiles_samples
-
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
@@ -170,7 +148,11 @@ if __name__ == '__main__':
     ax_sample.set_title('Observations with Noise')
     plt.show()
 
-    model = RateGP(num_inducing=128, time_range=time_range)
+    my_inducing_pts = torch.stack([
+                torch.linspace(time_range[0], time_range[1], 32),
+                torch.randn(32)
+        ], dim=-1)
+    model = RateGP(inducing_points=my_inducing_pts)
     model.fit(X, Y, num_iter=1000, num_particles=64)
 
     # define test set (optionally on GPU)
@@ -188,9 +170,9 @@ if __name__ == '__main__':
     # Get E[exp(f)] via f_i ~ GP, 1/n \sum_{i=1}^{n} exp(f_i).
     # Similarly get the 5th and 95th percentiles
     samples = output(torch.Size([1000]))
-    lower, fn_mean, upper = RateGP.percentiles_from_samples(samples)
+    lower, fn_mean, upper = percentiles_from_samples(samples)
 
-    y_sim_lower, y_sim_mean, y_sim_upper = RateGP.percentiles_from_samples(Poisson(samples.exp()).sample())
+    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(Poisson(samples.exp()).sample())
 
 
     # y_sim = obs_fn(fn_mean)
