@@ -5,6 +5,7 @@ import pyro.distributions as dist
 import torch
 from torch.distributions.poisson import Poisson
 from torch.utils.data import TensorDataset, DataLoader
+from factorio.utils.helpers import percentiles_from_samples
 import pyro
 import gpytorch
 from gpytorch.variational import CholeskyVariationalDistribution
@@ -111,24 +112,6 @@ class RateGP(gpytorch.models.ApproximateGP):
                     # lengthscale=self.covar_module.base_kernel.lengthscale.item(),
                     )
 
-    # Here's a quick helper function for getting smoothed percentile values from samples
-    @staticmethod
-    def percentiles_from_samples(samples, percentiles=[0.05, 0.5, 0.95]):
-        num_samples = samples.size(0)
-        samples = samples.sort(dim=0)[0]
-
-        # Get samples corresponding to percentile
-        percentile_samples = [samples[int(num_samples * percentile)] for percentile in percentiles]
-
-        # Smooth the samples
-        kernel = torch.full((1, 1, 5), fill_value=0.2)
-        percentiles_samples = [
-            torch.nn.functional.conv1d(percentile_sample.view(1, 1, -1), kernel, padding=2).view(-1)
-            for percentile_sample in percentile_samples
-        ]
-
-        return percentiles_samples
-
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
@@ -186,9 +169,9 @@ if __name__ == '__main__':
     # Get E[exp(f)] via f_i ~ GP, 1/n \sum_{i=1}^{n} exp(f_i).
     # Similarly get the 5th and 95th percentiles
     samples = output(torch.Size([1000]))
-    lower, fn_mean, upper = RateGP.percentiles_from_samples(samples)
+    lower, fn_mean, upper = percentiles_from_samples(samples)
 
-    y_sim_lower, y_sim_mean, y_sim_upper = RateGP.percentiles_from_samples(Poisson(samples.exp()).sample())
+    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(Poisson(samples.exp()).sample())
 
 
     # y_sim = obs_fn(fn_mean)
