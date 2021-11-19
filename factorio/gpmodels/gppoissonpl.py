@@ -86,7 +86,7 @@ def fit(module,
             save_top_k=1,
             mode='min',
         )
-        callbacks += checkpoint_callback
+        callbacks += [checkpoint_callback]
 
     # trainer = pl.Trainer(gpus=8) (if you have GPUs)
     trainer = Trainer(
