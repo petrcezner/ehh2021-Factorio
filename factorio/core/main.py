@@ -32,7 +32,7 @@ if __name__ == '__main__':
     path_parser = parser.add_argument('-c', '--config', type=Path, default='config.ini',
                                       help='Set path to your config.ini file.')
     path_parser = parser.add_argument('-o', '--output', type=Path, default='mnt/model_state.pth',
-                                      help='Set path to your config.ini file.')
+                                      help='Set path to load saved model.')
 
     args = parser.parse_args()
     if not args.config.exists():
