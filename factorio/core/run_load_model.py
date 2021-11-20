@@ -1,18 +1,20 @@
-import configparser
 import datetime
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
+import numpy as np
 import torch
-from torch.distributions.poisson import Poisson
-from torch.utils.data import DataLoader
-from torch.utils.data import TensorDataset
 from factorio.gpmodels.gplognormpl import LogNormGPpl
-from factorio.gpmodels.gppoissonpl import RateGPpl, fit
 from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
+
+
+def get_current_prediction(dsfactory: data_loader.DataFactory, hour: int = 2):
+    current_data = dsfactory.get_future_data(hour)
+
+    return pd.DataFrame(np.random.randn(24, 1),
+                        columns=['prediction']
+                        )
 
 
 if __name__ == '__main__':
@@ -58,7 +60,7 @@ if __name__ == '__main__':
     ], dim=-1)
 
     model = LogNormGPpl.load_model(load_path)
-    
+
     test_x = dfactory.dset[-200:][0]
     Y = dfactory.dset[-200:][1]
     x_plt = torch.arange(Y.size(0)).detach().cpu()
@@ -69,7 +71,7 @@ if __name__ == '__main__':
     # Similarly get the 5th and 95th percentiles
     lat_samples = output.rsample(torch.Size([100])).exp()
     samples_expanded = model.gp.likelihood(lat_samples).rsample(torch.Size([10]))
-    samples = samples_expanded.view(samples_expanded.size(0)*samples_expanded.size(1), -1)
+    samples = samples_expanded.view(samples_expanded.size(0) * samples_expanded.size(1), -1)
 
     # Similarly get the 5th and 95th percentiles
     # samples = model.gp.likelihood(output.mean).rsample(torch.Size([1000]))
