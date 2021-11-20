@@ -44,7 +44,7 @@ class MobilityGoogle:
             month = int(time[1])
             day = int(time[2])
 
-            for hour in range(0,24):
+            for hour in range(0, 24):
                 date = datetime(year, month, day, hour, 0)
                 if start_date < date < end_date:
                     hourly_mobility[date] = mob.iloc[1:]

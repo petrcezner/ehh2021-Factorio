@@ -3,6 +3,9 @@ import datetime
 from pathlib import Path
 import warnings
 
+from factorio.mobility.mobility_apple import MobilityApple
+from factorio.mobility.mobility_google import MobilityGoogle
+from factorio.mobility.mobility_waze import MobilityWaze
 from factorio.utils.hack_config import HackConfig
 from factorio.web_scraping.football import Football
 
@@ -28,7 +31,7 @@ class DataFactory:
         self.dset = self.create_timestamp(data, data_frequency, dtype=dtype)
 
     def create_timestamp(self, data, data_frequency, dtype=torch.float):
-        data_ikem = data[data['destination__hospitalId'] == 'hospital:IKEM']
+        data_ikem = data[data['destination__hospitalId'] == 'hospital:MOTOL']
         cols = ['createdTs', 'closedTs', 'ambulanceLocation__first__dispatchingEtaTs', 'dispatchingTs']
         for col in cols:
             data_ikem.loc[:, col] = pd.to_datetime(data_ikem[col])
@@ -40,16 +43,16 @@ class DataFactory:
             if row['ambulanceLocation__first__dispatchingEtaTs'] is pd.NaT:
                 time_data.loc[i, 'ambulanceLocation__first__dispatchingEtaTs'] = time_data.loc[i, 'dispatchingTs']
         time_data.set_index('ambulanceLocation__first__dispatchingEtaTs', inplace=True, drop=True)
-        hour_rate = time_data.resample(f'{data_frequency}min').count().loc[datetime.datetime(2020, 8, 31):]
+        hour_rate = time_data.resample(f'{data_frequency}min').count().loc[datetime.datetime(2020, 8, 31, 16):]
         end_date = pd.to_datetime(hour_rate.index.values[-1])
-        x = self.load_weather(end_date).to(dtype=dtype)
+        x = self.load_weather(start_date=datetime.datetime(2020, 8, 31, 16),
+                              end_date=end_date).to(dtype=dtype)
         y = torch.as_tensor(hour_rate['cases'].values).to(dtype=dtype)
         return TensorDataset(x, y)
 
-    def load_weather(self, end_date):
+    def load_weather(self, start_date, end_date):
         historical_weather = HistoricalWeather()
 
-        start_date = datetime.datetime(2020, 8, 31)
         data = historical_weather.get_temperature(start_date, end_date)
         data.fillna(0, inplace=True)
         selected_data = data[['temp', 'rhum', 'pres']]
@@ -57,19 +60,22 @@ class DataFactory:
         selected_data.insert(1, 'day in month', selected_data.index.day)
         selected_data.insert(2, 'month', selected_data.index.month)
 
-        football = self.load_football(end_date)
+        football = self.load_football(start_date, end_date)
+        # google = pd.DataFrame.from_dict(MobilityGoogle().get_mobility(), orinet='index')
+        # apple = pd.DataFrame.from_dict(MobilityApple().get_mobility(), orinet='index')
+        # waze = pd.DataFrame.from_dict(MobilityWaze().get_mobility(), orinet='index')
         selected_data.insert(6, 'football', football.values)
 
         self.scaler.fit(selected_data.values)
         transformed_values = self.scaler.transform(selected_data.values)
         return torch.as_tensor(transformed_values)
 
-    def load_football(self, end_date):
+    def load_football(self, start_date, end_date):
         football = Football(self.teams)
 
         hourly_visitors = football.get_visitors()
         df = pd.DataFrame.from_dict(hourly_visitors, orient='index')
-        return df[:end_date]
+        return df[start_date:end_date]
 
     def get_min_max(self):
         return self.dset[:][0].min(dim=0)[0].tolist(), self.dset[:][0].max(dim=0)[0].tolist()
