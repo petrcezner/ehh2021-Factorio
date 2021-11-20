@@ -42,7 +42,7 @@ class RateGPpl(LightningModule):
     #     return self.gp.predict(X)
 
     def configure_optimizers(self):
-        optimizer = pyro.optim.Adam({"lr": 0.01})
+        optimizer = pyro.optim.Adam({"lr": self.lr})
         elbo = pyro.infer.TraceGraph_ELBO(
             num_particles=self.num_particles, vectorize_particles=True, retain_graph=True)
         self.svi = pyro.infer.SVI(
@@ -167,7 +167,7 @@ if __name__ == '__main__':
 
 
     num_inducing = 164
-    num_iter = 1000
+    num_iter = 1
     num_particles = 32
     slow_mode = False  # enables checkpointing and logging
     # Generate synthetic data
