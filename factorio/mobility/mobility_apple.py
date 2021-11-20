@@ -8,8 +8,8 @@ class MobilityApple:
         self.__reports_df = pd.read_csv(datafile)
 
     def get_mobility(self,
-                    start_date = datetime(2020, 8, 31),
-                    end_date = datetime(2021, 11, 18, 23, 59)):
+                     start_date=datetime(2020, 8, 31),
+                     end_date=datetime(2021, 11, 18, 23, 59)):
         mobility = self.__reports_df.loc[self.__reports_df['region'] == "Prague"]
 
         hourly_mobility = {}
@@ -18,4 +18,3 @@ class MobilityApple:
                 hourly_mobility[single_date] = mobility.iloc[1:]
 
         return hourly_mobility
-
