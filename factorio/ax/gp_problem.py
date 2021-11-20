@@ -2,14 +2,14 @@ from collections import Iterable
 
 import torch
 from torch import norm
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 from factorio.gpmodels.gppoissonpl import RateGPpl, fit
 from factorio.utils import helpers
 
 
 class GpProblem:
-    def __init__(self, dset, ard_num_dims,
+    def __init__(self, datafactory, ard_num_dims,
                  cv_ratios: Iterable = None,
                  max_train_iter: int = 1000,
                  slow_mode=False,
@@ -17,11 +17,16 @@ class GpProblem:
         if cv_ratios is None:
             cv_ratios = [0.5]
         self.cv_ratios = cv_ratios
-        self.dset = dset
+        self.data_factory = datafactory
+        self.dset = datafactory.dset
         self.ard_num_dims = ard_num_dims
         self.max_train_iter = max_train_iter
         self.slow_mode = slow_mode
         self.num_particles = num_particles
+        self.dtype = torch.float
+        self.loader_batch_size = 15000
+        self.learning_rate = 0.0001
+        self.num_inducing = 164
 
     def run_experiment(self, params_dict, use_gpu):
         kernel_names = [val for key, val in params_dict.items()
@@ -37,23 +42,30 @@ class GpProblem:
                                                train_samples=train_samples)
 
         train_dataset, _ = cv_datasets[0]
-        # TODO: resolve shuffle of train dataset and batch size
-        loader = DataLoader(train_dataset)
-        time_range = (0, 2.5)
-        num_inducing = 164
+        dlen = len(self.dset)
+        loader = DataLoader(train_dataset, shuffle=True, batch_size=self.loader_batch_size)
+        loader = DataLoader(
+            Subset(self.dset, torch.arange(dlen - 1000, dlen) - 1),
+            batch_size=self.loader_batch_size,
+            shuffle=True
+        )
+        X_mins, X_maxs = self.data_factory.get_min_max()
+
         inducing_pts = torch.stack([
-            torch.linspace(time_range[0], time_range[1], num_inducing),
-            torch.randn(num_inducing)
+            torch.linspace(minimum, maximum, self.num_inducing, dtype=self.dtype)
+            for minimum, maximum in zip(X_mins, X_maxs)
         ], dim=-1)
 
         model = RateGPpl(kernel=kernel,
                          num_particles=self.num_particles,
-                         inducing_points=inducing_pts)
+                         inducing_points=inducing_pts,
+                         lr=self.learning_rate)
 
         fit(model,
             train_dataloader=loader,
             max_epochs=self.max_train_iter,
             verbose=False,
+            patience=10,
             enable_checkpointing=self.slow_mode,
             enable_logger=True,
             use_gpu=use_gpu)

@@ -99,13 +99,17 @@ if __name__ == '__main__':
     hack_config = HackConfig.from_config(args.config)
 
     data_ = load_data(hack_config.z_case)
-    data_loader = DataFactory(data_, hack_config.data_frequency)
+    data_loader = DataFactory(data_,
+                              data_frequency=hack_config.data_frequency,
+                              hospital=hack_config.hospital,
+                              teams=hack_config.teams,
+                              data_folder=hack_config.data_folder)
 
     cv_ratios = np.linspace(hack_config.cv_ratios_start,
                             hack_config.cv_ratios_stop,
                             hack_config.cv_ratios_steps)
 
-    problem = GpProblem(data_loader.dset,
+    problem = GpProblem(data_loader,
                         data_loader.dset[:][0][0].size(0),
                         cv_ratios=cv_ratios
                         )
@@ -113,7 +117,7 @@ if __name__ == '__main__':
     file_name = Path(f'{hack_config.experiment_name}_{time_now.strftime("%Y%d%m%H%M%S")}.json')
     full_path = str(experiment_root / file_name)
     ax_client = kernel_client(trials=hack_config.inter_trials,
-                              valid_size=hack_config.validation_size)
+                              valid_size=hack_config.valid_size)
 
     for i in trange(hack_config.trials):
         parameters, trial_index = ax_client.get_next_trial()
