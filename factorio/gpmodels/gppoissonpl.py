@@ -20,7 +20,6 @@ class RateGPpl(LightningModule):
                  inducing_points: torch.Tensor,
                  name_prefix="mixture_gp",
                  learn_inducing_locations=False,
-                 lb_periodicity=0,
                  lr=0.01,
                  num_particles=64,
                  kernel=None):
@@ -30,7 +29,6 @@ class RateGPpl(LightningModule):
         self.gp = RateGP(inducing_points=inducing_points,
                          name_prefix=name_prefix,
                          learn_inducing_locations=learn_inducing_locations,
-                         lb_periodicity=lb_periodicity,
                          kernel=kernel)
         self.lr = lr
         self.num_particles = num_particles
@@ -45,7 +43,7 @@ class RateGPpl(LightningModule):
 
     def configure_optimizers(self):
         optimizer = pyro.optim.Adam({"lr": 0.01})
-        elbo = pyro.infer.Trace_ELBO(
+        elbo = pyro.infer.TraceGraph_ELBO(
             num_particles=self.num_particles, vectorize_particles=True, retain_graph=True)
         self.svi = pyro.infer.SVI(
             self.gp.model, self.gp.guide, optimizer, elbo)
@@ -94,6 +92,18 @@ class RateGPpl(LightningModule):
                 for res in results
             ])
         return res_dict
+
+    def save_model(self, save_path):
+        torch.save(self.state_dict(), save_path)
+
+    @classmethod
+    def load_model(cls, load_path, num_particles=32):
+        loaded_state_dict = torch.load(load_path)
+        loaded_inducing_points = loaded_state_dict['gp.variational_strategy.inducing_points']
+        model = cls(inducing_points=loaded_inducing_points,
+                        num_particles=num_particles)
+        model.load_state_dict(loaded_state_dict)
+        return model
 
 
 def fit(module,

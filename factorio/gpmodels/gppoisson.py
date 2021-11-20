@@ -18,7 +18,6 @@ class RateGP(gpytorch.models.ApproximateGP):
                  inducing_points: torch.Tensor,
                  name_prefix="rate_exact_gp",
                  learn_inducing_locations=False,
-                 lb_periodicity=0,
                  kernel=None):
         self.name_prefix = name_prefix
         # Define all the variational stuff
@@ -37,7 +36,8 @@ class RateGP(gpytorch.models.ApproximateGP):
         # Mean, covar, likelihood
         self.mean_module = gpytorch.means.ConstantMean(ard_num_dims=ard_num_dims)
         if kernel is None:
-            kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.MaternKernel(nu=1.5, ard_num_dims=ard_num_dims))
+            # kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.MaternKernel(nu=2.5, ard_num_dims=ard_num_dims))
+            kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=ard_num_dims))
         self.covar_module = kernel  # \
         # + gpytorch.kernels.ScaleKernel(gpytorch.kernels.PeriodicKernel(
         #     period_length_constraint= gpytorch.constraints.GreaterThan(lb_periodicity)))

@@ -1,15 +1,16 @@
 import re
-from collections import Iterable
+from typing import Iterable
 from threading import Timer
 from functools import reduce
 
 import gpytorch
 from gpytorch.kernels import ScaleKernel, MaternKernel, RBFKernel, RQKernel, PeriodicKernel, SpectralMixtureKernel, \
     PolynomialKernel
+import torch
 from torch.utils.data import Dataset, Subset
 
 
-class RepeatedTimer(object):
+class RepeatedTimer():
     def __init__(self, interval, function, *args, **kwargs):
         self._timer = None
         self.interval = interval
@@ -35,7 +36,7 @@ class RepeatedTimer(object):
         self.is_running = False
 
 
-def generate_additive_kernel(kernel_names: Iterable[str],
+def generate_additive_kernel(kernel_names: Iterable,
                              ard_num_dims: int = 1):
     kers_list = [get_kernel_by_name(ker_name, ard_num_dims)
                  for ker_name in kernel_names if 'None' not in ker_name]
@@ -91,3 +92,29 @@ def timeseries_split(dataset: Dataset,
         for part in parts
     ]
     return tr_val_tuples
+
+
+def percentiles_from_samples(samples, percentiles=[0.05, 0.5, 0.95]):
+    """A quick helper function for getting smoothed percentile values from samples
+
+    Args:
+        samples (torch.Tensor): samples (y values) from distribution
+        percentiles (list, optional): Percentiles to approximate. Defaults to [0.05, 0.5, 0.95].
+
+    Returns:
+        list: list of MC estimated percentiles queried by `percentiles`
+    """    
+    num_samples = samples.size(0)
+    samples = samples.sort(dim=0)[0]
+
+    # Get samples corresponding to percentile
+    percentile_samples = [samples[int(num_samples * percentile)] for percentile in percentiles]
+
+    # Smooth the samples
+    kernel = torch.full((1, 1, 5), fill_value=0.2)
+    percentiles_samples = [
+        torch.nn.functional.conv1d(percentile_sample.view(1, 1, -1), kernel, padding=2).view(-1)
+        for percentile_sample in percentile_samples
+    ]
+
+    return percentiles_samples
