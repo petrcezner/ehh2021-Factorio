@@ -14,7 +14,6 @@ from factorio.gpmodels.gplognormpl import LogNormGPpl, fit
 from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
 
-
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import argparse
@@ -22,12 +21,12 @@ if __name__ == '__main__':
     # Move to config at some point
     dtype = torch.float
     num_inducing = 64
-    num_iter = 2
+    num_iter = 5000
     num_particles = 32
     loader_batch_size = 15000
     learn_inducing_locations = True
     slow_mode = False  # enables checkpointing and logging
-    learning_rate = 0.001
+    learning_rate = 0.01
 
     time_now = datetime.datetime.utcnow()
     parser = argparse.ArgumentParser()
@@ -44,8 +43,7 @@ if __name__ == '__main__':
     output_path = args.output
 
     hack_config = data_loader.HackConfig.from_config(args.config)
-    data = data_loader.load_data(hack_config.z_case)
-    dfactory = data_loader.DataFactory(data,
+    dfactory = data_loader.DataFactory(None,
                                        hack_config.data_frequency,
                                        teams=hack_config.teams,
                                        hospital=hack_config.hospital,
@@ -56,7 +54,8 @@ if __name__ == '__main__':
 
     dlen = len(dfactory.dset)
     loader = DataLoader(
-        Subset(dfactory.dset, torch.arange(dlen-1000, dlen)-1),
+        # dfactory.dset,
+        Subset(dfactory.dset, torch.arange(dlen - 2000, dlen - 100) - 1),
         batch_size=loader_batch_size,
         shuffle=True
     )
@@ -74,11 +73,13 @@ if __name__ == '__main__':
         patience=10,
         verbose=False,
         enable_checkpointing=slow_mode,
-        enable_logger=True)
-    
+        enable_logger=True,
+        use_gpu=hack_config.use_gpu)
+
     model.save_model(output_path)
 
     test_x = dfactory.dset[-200:][0]
+    real_x = dfactory.inverse_transform(test_x)
     Y = dfactory.dset[-200:][1]
     x_plt = torch.arange(Y.size(0)).detach().cpu()
     model.eval()
@@ -86,11 +87,15 @@ if __name__ == '__main__':
         output = model(test_x)
 
     # Similarly get the 5th and 95th percentiles
-    samples = model.gp.likelihood(output.mean).rsample(torch.Size([1000]))
-    lower, fn_mean, upper = percentiles_from_samples(samples)
+    lat_samples = output.rsample(torch.Size([1000])).exp()
 
-    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(
-        Poisson(samples).sample())
+    # Similarly get the 5th and 95th percentiles
+    samples = model.gp.likelihood(output.mean).rsample(torch.Size([1000]))
+    lower, fn_mean, upper = percentiles_from_samples(lat_samples, [.16, 0.5, 0.84])
+    # lower, upper = output.confidence_region()
+    fn_mean = output.mean.exp()
+
+    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(samples, [.25, 0.5, 0.75])
 
     # visualize the result
     fig, (ax_func, ax_samp) = plt.subplots(1, 2, figsize=(12, 3))

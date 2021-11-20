@@ -52,7 +52,7 @@ class LogNormGP(gpytorch.models.pyro.PyroGP):
             # kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.MaternKernel(nu=2.5, ard_num_dims=ard_num_dims))
             kernel = gpytorch.kernels.ScaleKernel(
                 gpytorch.kernels.MaternKernel(
-                    nu=0.5,
+                    nu=2.5,
                     ard_num_dims=ard_num_dims
                 ),
                 ard_num_dims=ard_num_dims
