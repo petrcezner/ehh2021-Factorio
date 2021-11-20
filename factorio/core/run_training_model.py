@@ -8,7 +8,7 @@ import pandas as pd
 import torch
 from torch.distributions.poisson import Poisson
 from torch.utils.data import DataLoader
-from torch.utils.data import TensorDataset
+from torch.utils.data import TensorDataset, Subset
 from factorio.gpmodels.gppoissonpl import RateGPpl, fit
 from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
@@ -21,7 +21,7 @@ if __name__ == '__main__':
     # Move to config at some point
     dtype = torch.float
     num_inducing = 64
-    num_iter = 1000
+    num_iter = 200
     num_particles = 32
     loader_batch_size = 15000
     learn_inducing_locations = True
@@ -47,6 +47,8 @@ if __name__ == '__main__':
     dfactory = data_loader.DataFactory(data,
                                        hack_config.data_frequency,
                                        teams=hack_config.teams,
+                                       hospital=hack_config.hospital,
+                                       data_folder=hack_config.data_folder,
                                        dtype=dtype)
 
     X_mins, X_maxs = dfactory.get_min_max()
@@ -55,8 +57,10 @@ if __name__ == '__main__':
         torch.linspace(minimum, maximum, num_inducing, dtype=dtype)
         for minimum, maximum in zip(X_mins, X_maxs)
     ], dim=-1)
+
+    dlen = len(dfactory.dset)
     loader = DataLoader(
-        dfactory.dset[:-100],
+        Subset(dfactory.dset, torch.arange(dlen-1000, dlen)-1),
         batch_size=loader_batch_size,
         shuffle=True
     )
@@ -75,8 +79,8 @@ if __name__ == '__main__':
     
     model.save_model(output_path)
 
-    test_x = dfactory.dset[-1000:][0]
-    Y = dfactory.dset[-1000:][1]
+    test_x = dfactory.dset[-200:][0]
+    Y = dfactory.dset[-200:][1]
     x_plt = torch.arange(Y.size(0)).detach().cpu()
     model.eval()
     with torch.no_grad():

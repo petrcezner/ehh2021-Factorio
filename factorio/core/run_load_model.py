@@ -45,6 +45,8 @@ if __name__ == '__main__':
     dfactory = data_loader.DataFactory(data,
                                        hack_config.data_frequency,
                                        teams=hack_config.teams,
+                                       hospital=hack_config.hospital,
+                                       data_folder=hack_config.data_folder,
                                        dtype=dtype)
 
     X_mins, X_maxs = dfactory.get_min_max()
