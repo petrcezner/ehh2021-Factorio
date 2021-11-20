@@ -1,0 +1,16 @@
+{
+  "teams": [
+    {
+      "name": "SK Slavia Praha",
+      "capacity": 19370
+    },
+    {
+      "name": "Bohemians Praha 1905",
+      "capacity": 6300
+    },
+    {
+      "name": "AC Sparta Praha",
+      "capacity": 18887
+    }
+  ]
+}
