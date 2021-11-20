@@ -12,6 +12,14 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "With 3rd party code",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Train model",
             "type": "python",
             "request": "launch",

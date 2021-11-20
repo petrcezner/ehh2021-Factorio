@@ -1,5 +1,5 @@
 import math
-from typing import Tuple
+from typing import List, Tuple
 from pyro.distributions import constraints
 import pyro.distributions as dist
 import torch
@@ -10,21 +10,30 @@ from factorio.utils.helpers import percentiles_from_samples
 import pyro
 import gpytorch
 from gpytorch.variational import CholeskyVariationalDistribution
+from gpytorch.variational import IndependentMultitaskVariationalStrategy
 from gpytorch.variational import VariationalStrategy
 from tqdm import trange
 
 
-class LogNormGP(RateGP):
+class LogNormGP(gpytorch.models.pyro.PyroGP):
     def __init__(self,
-                 inducing_points: torch.Tensor,
+                 num_inducing: int,
+                 X_mins: List,
+                 X_maxs: List,
                  name_prefix="rate_exact_gp",
                  learn_inducing_locations=False,
-                 kernel=None):
+                 kernel=None,
+                 num_data=100):
         self.name_prefix = name_prefix
+        num_tasks = 2  # mean and stdvar of exponentiated distrib
         # Define all the variational stuff
-        num_inducing = inducing_points.size(0)
-        ard_num_dims = inducing_points.size(1)
-        variational_dist = CholeskyVariationalDistribution(num_inducing_points=num_inducing)
+        inducing_points = torch.stack([
+            torch.linspace(minimum, maximum, num_inducing)
+            for minimum, maximum in zip(X_mins, X_maxs)
+        ], dim=-1)#.repeat(num_tasks, 1, 1)
+        ard_num_dims = inducing_points.size(-1)
+        variational_dist = CholeskyVariationalDistribution(
+            num_inducing_points=num_inducing)
         variational_strategy = VariationalStrategy(
             self, inducing_points,
             variational_dist,
@@ -32,70 +41,28 @@ class LogNormGP(RateGP):
         )
 
         # Standard initializtation
-        super().__init__(variational_strategy)
+        likelihood = LogNormLikelihood()
+        super().__init__(variational_strategy, likelihood, num_data=num_data)
+        self.likelihood = likelihood
 
         # Mean, covar, likelihood
-        self.mean_module = gpytorch.means.ConstantMean(ard_num_dims=ard_num_dims)
+        self.mean_module = gpytorch.means.ConstantMean(
+            ard_num_dims=ard_num_dims
+        )
         if kernel is None:
             # kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.MaternKernel(nu=2.5, ard_num_dims=ard_num_dims))
-            kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=ard_num_dims))
+            kernel = gpytorch.kernels.ScaleKernel(
+                gpytorch.kernels.RBFKernel(
+                    ard_num_dims=ard_num_dims
+                ),
+                ard_num_dims=ard_num_dims
+            )
         self.covar_module = kernel
 
-
-    def guide(self, x, y):
-        # Get q(f) - variational (guide) distribution of latent function
-        function_dist = self.pyro_guide(x)
-
-        # Use a plate here to mark conditional independencies
-        with pyro.plate(self.name_prefix + ".data_plate", dim=-1):
-            # Sample from latent function distribution
-            pyro.sample(self.name_prefix + ".f(x)", function_dist)
-
-    def model(self, x, y):
-        pyro.module(self.name_prefix + ".gp", self)
-
-        # register the variational parameters with Pyro.
-        # ss_offset = pyro.param("ss_offset_q",
-        #                        torch.tensor(0.224),
-        #                        constraint=constraints.positive)
-        noise_scale = pyro.param("process_noise_scale_q",
-                                 torch.tensor(0.05),
-                                 constraint=constraints.positive)
-
-        # Get p(f) - prior distribution of latent function
-        rate_gp_lat = self.pyro_model(x)
-
-        # Use a plate here to mark conditional independencies
-        with pyro.plate(self.name_prefix + ".data_plate", dim=-1):
-            # Sample from latent function distribution
-            function_samples = pyro.sample(self.name_prefix + ".f(x)", rate_gp_lat)
-
-            # Use the link function to convert GP samples into observations dists parameters
-            rate_positive = function_samples.exp()
-
-            transforms = [dist.transforms.ExpTransform()]
-            transformed_dist = dist.TransformedDistribution(
-                dist.Normal(rate_positive, noise_scale),
-                transforms
-                )
-
-            # Sample from observed distribution
-            return pyro.sample(
-                self.name_prefix + ".y",
-                transformed_dist,
-                obs=y
-            )
-
-    def log_prob(self, x, y):
-        output = self(x)
-        mean = output.mean
-        noise_scale = pyro.param('process_noise_scale_q')
-        transforms = [dist.transforms.ExpTransform()]
-        transformed_dist = dist.TransformedDistribution(
-            dist.Normal(mean, noise_scale),
-            transforms
-        )
-        return transformed_dist.log_prob(y)
+    def forward(self, x):
+        mean = self.mean_module(x)
+        covar = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean, covar)
 
     def fit(self, tr_x, tr_y, num_iter=100, num_particles=256):
         optimizer = pyro.optim.Adam({"lr": 0.01})
@@ -123,6 +90,37 @@ class LogNormGP(RateGP):
                 )
 
 
+class LogNormLikelihood(gpytorch.likelihoods.Likelihood):
+    def __init__(self):
+        super().__init__()
+
+        # # These are parameters/buffers for the cluster assignment latent variables
+        # self.register_buffer("prior_cluster_logits", torch.zeros(num_tasks, num_clusters))
+        # self.register_parameter("variational_cluster_logits", torch.nn.Parameter(torch.randn(num_tasks, num_clusters)))
+
+        # # The Gaussian observational noise
+        self.register_parameter("raw_noise", torch.nn.Parameter(torch.tensor(-5.0)))
+
+        # Other info
+        # self.num_tasks = num_tasks
+        # self.max_plate_nesting = 1
+
+    # def pyro_guide(self, function_dist, target):
+    #     return super().pyro_guide(function_dist, target)
+
+    # def pyro_model(self, function_dist, target):
+    #     return super().pyro_model(function_dist, target)
+
+    def forward(self, function_samples):
+        locs = function_samples.exp()
+        # Now we return the observational distribution, based on the function_samples and cluster_assignment_samples
+        res = pyro.distributions.Normal(
+            loc=locs,
+            scale=self.raw_noise.exp()
+        )
+        return res
+
+
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
@@ -135,6 +133,13 @@ if __name__ == '__main__':
     # Generate synthetic data
     # here we generate some synthetic samples
     NSamp = 1000
+    num_inducing = 64
+    num_iter = 200
+    num_particles = 32
+    loader_batch_size = 15000
+    learn_inducing_locations = True
+    slow_mode = False  # enables checkpointing and logging
+    learning_rate = 0.0001
     print(f'NSamp = {NSamp}')
     time_range = (0, 2.5)
 
@@ -146,23 +151,25 @@ if __name__ == '__main__':
     fx = lat_fn(X[:, 0])
     Y = obs_fn(fx).float()
 
-    fig, (ax_lat, ax_sample) = plt.subplots(1, 2, figsize=(10, 3))
-    ax_lat.plot(X[:, 0], fx.exp())
-    ax_lat.set_xlabel('x')
-    ax_lat.set_ylabel('$f(x)$')
-    ax_lat.set_title('Latent function')
-    ax_sample.scatter(X[:, 0], Y)
-    ax_sample.set_xlabel('x')
-    ax_sample.set_ylabel('y')
-    ax_sample.set_title('Observations with Noise')
-    plt.show()
+    # fig, (ax_lat, ax_sample) = plt.subplots(1, 2, figsize=(10, 3))
+    # ax_lat.plot(X[:, 0], fx.exp())
+    # ax_lat.set_xlabel('x')
+    # ax_lat.set_ylabel('$f(x)$')
+    # ax_lat.set_title('Latent function')
+    # ax_sample.scatter(X[:, 0], Y)
+    # ax_sample.set_xlabel('x')
+    # ax_sample.set_ylabel('y')
+    # ax_sample.set_title('Observations with Noise')
+    # plt.show()
 
-    my_inducing_pts = torch.stack([
-        torch.linspace(time_range[0], time_range[1], 32),
-        torch.randn(32)
-    ], dim=-1)
-    model = RateGP(inducing_points=my_inducing_pts)
-    model.fit(X, Y, num_iter=1000, num_particles=64)
+    model = LogNormGP(num_inducing=num_inducing,
+                      X_mins=[time_range[0], -2],
+                      X_maxs=[time_range[1], 2],
+                      learn_inducing_locations=True)
+    model.fit(X,
+              Y,
+              num_iter=num_iter,
+              num_particles=num_particles)
 
     # define test set (optionally on GPU)
     denser = 2  # make test set 2 times denser then the training set
