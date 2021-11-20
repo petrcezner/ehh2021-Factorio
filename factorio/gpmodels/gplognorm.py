@@ -5,6 +5,7 @@ import pyro.distributions as dist
 import torch
 from torch.distributions.poisson import Poisson
 from torch.utils.data import TensorDataset, DataLoader
+from factorio.gpmodels.gppoisson import RateGP
 from factorio.utils.helpers import percentiles_from_samples
 import pyro
 import gpytorch
@@ -13,7 +14,7 @@ from gpytorch.variational import VariationalStrategy
 from tqdm import trange
 
 
-class RateGP(gpytorch.models.ApproximateGP):
+class LogNormGP(RateGP):
     def __init__(self,
                  inducing_points: torch.Tensor,
                  name_prefix="rate_exact_gp",
@@ -38,14 +39,8 @@ class RateGP(gpytorch.models.ApproximateGP):
         if kernel is None:
             # kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.MaternKernel(nu=2.5, ard_num_dims=ard_num_dims))
             kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel(ard_num_dims=ard_num_dims))
-        self.covar_module = kernel  # \
-        # + gpytorch.kernels.ScaleKernel(gpytorch.kernels.PeriodicKernel(
-        #     period_length_constraint= gpytorch.constraints.GreaterThan(lb_periodicity)))
+        self.covar_module = kernel
 
-    def forward(self, x):
-        mean = self.mean_module(x)
-        covar = self.covar_module(x)
-        return gpytorch.distributions.MultivariateNormal(mean, covar)
 
     def guide(self, x, y):
         # Get q(f) - variational (guide) distribution of latent function
@@ -63,9 +58,9 @@ class RateGP(gpytorch.models.ApproximateGP):
         # ss_offset = pyro.param("ss_offset_q",
         #                        torch.tensor(0.224),
         #                        constraint=constraints.positive)
-        # noise_scale = pyro.param("process_noise_scale_q",
-        #                          torch.tensor(1.01),
-        #                          constraint=constraints.positive)
+        noise_scale = pyro.param("process_noise_scale_q",
+                                 torch.tensor(0.05),
+                                 constraint=constraints.positive)
 
         # Get p(f) - prior distribution of latent function
         rate_gp_lat = self.pyro_model(x)
@@ -78,23 +73,29 @@ class RateGP(gpytorch.models.ApproximateGP):
             # Use the link function to convert GP samples into observations dists parameters
             rate_positive = function_samples.exp()
 
-            # transforms = [dist.transforms.ExpTransform(), dist.transforms.AffineTransform(loc=ss_offset, scale=1.0)]
-            # transformed_dist = dist.TransformedDistribution(
-            #     dist.Normal(transformed_samples, noise_scale),
-            #     transforms
-            #     )
+            transforms = [dist.transforms.ExpTransform()]
+            transformed_dist = dist.TransformedDistribution(
+                dist.Normal(rate_positive, noise_scale),
+                transforms
+                )
 
             # Sample from observed distribution
             return pyro.sample(
                 self.name_prefix + ".y",
-                Poisson(rate_positive),
+                transformed_dist,
                 obs=y
             )
 
     def log_prob(self, x, y):
         output = self(x)
         mean = output.mean
-        return Poisson(mean).log_prob(y)
+        noise_scale = pyro.param('process_noise_scale_q')
+        transforms = [dist.transforms.ExpTransform()]
+        transformed_dist = dist.TransformedDistribution(
+            dist.Normal(mean, noise_scale),
+            transforms
+        )
+        return transformed_dist.log_prob(y)
 
     def fit(self, tr_x, tr_y, num_iter=100, num_particles=256):
         optimizer = pyro.optim.Adam({"lr": 0.01})
