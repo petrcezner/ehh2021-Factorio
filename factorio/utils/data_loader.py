@@ -1,9 +1,7 @@
-import configparser
 import datetime
 import glob
 from pathlib import Path
 import warnings
-import dask.dataframe as dd
 from factorio.mobility.mobility_apple import MobilityApple
 from factorio.mobility.mobility_google import MobilityGoogle
 from factorio.mobility.mobility_waze import MobilityWaze
@@ -35,6 +33,16 @@ class DataFactory:
         self.scaler = MinMaxScaler()
         self.end_date = datetime.datetime(2021, 11, 15, 23, 55, 0)
         self.start_date = datetime.datetime(2017, 1, 1, 3)
+        self.football = Football(self.teams)
+        self.g_reports = [str(self.data_folder / '2020_CZ_Region_Mobility_Report.csv'),
+                          str(self.data_folder / '2021_CZ_Region_Mobility_Report.csv')]
+        self.a_datafile = str(self.data_folder / 'applemobilitytrends-2021-11-18.csv')
+        self.w_datafile = str(self.data_folder / "Waze _ COVID-19 Impact Dashboard_City-Level Data_Table.csv")
+
+        self.google_m = MobilityGoogle(reports=self.g_reports)
+        self.apple_m = MobilityApple(datafile=self.a_datafile)
+        self.waze_m = MobilityWaze(datafile=self.w_datafile)
+
         self.dset = self.create_timestamp(dtype=dtype)
 
     def create_timestamp(self, dtype=torch.float):
@@ -68,8 +76,7 @@ class DataFactory:
         selected_data.insert(6, 'football', football.values)
         selected_data = selected_data.join(google[['retail_and_recreation_percent_change_from_baseline',
                                                    'residential_percent_change_from_baseline']])
-        waze.columns = ['waze']
-        apple.columns = ['apple']
+
         selected_data = selected_data.join(waze['waze'])
         selected_data = selected_data.join(apple['apple'])
         selected_data = selected_data.join(incidence['incidence_7_100000'])
@@ -79,27 +86,21 @@ class DataFactory:
         return torch.as_tensor(transformed_values)
 
     def __load_mobility(self, start_date, end_date):
-        g_reports = [str(self.data_folder / '2020_CZ_Region_Mobility_Report.csv'),
-                     str(self.data_folder / '2021_CZ_Region_Mobility_Report.csv')]
-        a_datafile = str(self.data_folder / 'applemobilitytrends-2021-11-18.csv')
-        w_datafile = str(self.data_folder / "Waze _ COVID-19 Impact Dashboard_City-Level Data_Table.csv")
 
-        google_m = MobilityGoogle(reports=g_reports)
-        apple_m = MobilityApple(datafile=a_datafile)
-        waze_m = MobilityWaze(datafile=w_datafile)
-
-        google = pd.DataFrame.from_dict(google_m.get_mobility(), orient='index')
+        google = pd.DataFrame.from_dict(self.google_m.get_mobility(), orient='index')
         google = google[start_date:end_date]
 
-        apple = pd.DataFrame.from_dict(apple_m.get_mobility(), orient='index')
+        apple = pd.DataFrame.from_dict(self.apple_m.get_mobility(), orient='index')
         apple = apple[start_date:end_date]
 
-        waze = pd.DataFrame.from_dict(waze_m.get_mobility(), orient='index')
+        waze = pd.DataFrame.from_dict(self.waze_m.get_mobility(), orient='index')
         waze = waze[start_date:end_date]
         apple.fillna(0, inplace=True)
         waze = waze.resample(f'{self.data_frequency}min').ffill()
         apple = apple.resample(f'{self.data_frequency}min').ffill()
         google = google.resample(f'{self.data_frequency}min').ffill()
+        waze.columns = ['waze']
+        apple.columns = ['apple']
         return google, apple, waze
 
     def __load_ikem_data(self):
@@ -126,9 +127,7 @@ class DataFactory:
         return data_incidence.resample(f'{self.data_frequency}min').ffill()[start_date:end_date]
 
     def load_football(self, start_date, end_date):
-        football = Football(self.teams)
-
-        hourly_visitors = football.get_visitors(start_date, end_date)
+        hourly_visitors = self.football.get_visitors(start_date, end_date)
         df = pd.DataFrame.from_dict(hourly_visitors, orient='index')
         return df.resample(f'{self.data_frequency}min').ffill()[start_date:end_date]
 
@@ -137,6 +136,49 @@ class DataFactory:
 
     def inverse_transform(self, X: torch.Tensor):
         return self.scaler.inverse_transform(X.numpy())
+
+    def get_future_data(self, hour: int = 2, dtype=torch.float):
+        c_date = datetime.datetime.now()
+        weather = ActualWeather()
+        index = pd.date_range(start=c_date, end=c_date + datetime.timedelta(hours=hour),
+                              freq=f"{self.data_frequency}min")
+        index = [pd.to_datetime(date) for date in index]
+
+        tmp_dct = {}
+        temp = weather.get_temperature()
+        rhum = weather.get_humidity()
+        pres = weather.get_pressure()
+        football_data = pd.DataFrame.from_dict(self.football.get_visitors(index[0] - datetime.timedelta(days=365),
+                                                                          index[-1] + datetime.timedelta(days=1)),
+                                               orient='index')
+        google, apple, waze = self.__load_mobility(index[0] - datetime.timedelta(days=7),
+                                                   index[-1] - datetime.timedelta(days=7))
+        incidence = self.__load_incidence(index[0] - datetime.timedelta(days=7),
+                                          index[-1] - datetime.timedelta(days=7))
+
+        for h in range(hour):
+            tmp_dct[h] = {
+                'hour': index[h].hour,
+                'day in week': index[h].weekday(),
+                'month': index[h].month,
+                'temp': temp,
+                'rhum': rhum,
+                'pres': pres,
+                'football': football_data.loc[index[h]].values[0],
+            }
+        df = pd.DataFrame.from_dict(tmp_dct, orient='index')
+        google.reset_index(drop=True, inplace=True)
+        apple.reset_index(drop=True, inplace=True)
+        waze.reset_index(drop=True, inplace=True)
+        incidence.reset_index(drop=True, inplace=True)
+
+        df = df.join(google[['retail_and_recreation_percent_change_from_baseline',
+                             'residential_percent_change_from_baseline']])
+
+        df = df.join(waze['waze'])
+        df = df.join(apple['apple'])
+        df = df.join(incidence['incidence_7_100000'])
+        return torch.as_tensor(self.scaler.transform(df.values)).to(dtype)
 
 
 def load_data(data_path):
@@ -166,3 +208,5 @@ if __name__ == '__main__':
                               hospital=hack_config.hospital,
                               data_folder=hack_config.data_folder)
     print(data_loader.get_min_max())
+    future = data_loader.get_future_data()
+    print(future)

@@ -14,16 +14,15 @@ from factorio.gpmodels.gplognormpl import LogNormGPpl, fit
 from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
 
-
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import argparse
 
     # Move to config at some point
     dtype = torch.float
-    num_inducing = 32
-    num_iter = 1000
-    num_particles = 16
+    num_inducing = 64
+    num_iter = 5000
+    num_particles = 32
     loader_batch_size = 15000
     learn_inducing_locations = True
     slow_mode = False  # enables checkpointing and logging
@@ -56,7 +55,7 @@ if __name__ == '__main__':
     dlen = len(dfactory.dset)
     loader = DataLoader(
         # dfactory.dset,
-        Subset(dfactory.dset, torch.arange(dlen-1000, dlen-100)-5000),
+        Subset(dfactory.dset, torch.arange(dlen - 2000, dlen - 100) - 1),
         batch_size=loader_batch_size,
         shuffle=True
     )
@@ -74,11 +73,13 @@ if __name__ == '__main__':
         patience=10,
         verbose=False,
         enable_checkpointing=slow_mode,
-        enable_logger=True)
-    
+        enable_logger=True,
+        use_gpu=hack_config.use_gpu)
+
     model.save_model(output_path)
 
     test_x = dfactory.dset[-200:][0]
+    real_x = dfactory.inverse_transform(test_x)
     Y = dfactory.dset[-200:][1]
     x_plt = torch.arange(Y.size(0)).detach().cpu()
     model.eval()
