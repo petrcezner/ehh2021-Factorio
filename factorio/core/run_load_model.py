@@ -1,18 +1,27 @@
-import configparser
 import datetime
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
+import numpy as np
 import torch
-from torch.distributions.poisson import Poisson
-from torch.utils.data import DataLoader
-from torch.utils.data import TensorDataset
 from factorio.gpmodels.gplognormpl import LogNormGPpl
-from factorio.gpmodels.gppoissonpl import RateGPpl, fit
 from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
+
+
+def get_current_prediction(dsfactory: data_loader.DataFactory, hour: int = 2):
+    current_data = dsfactory.get_future_data(hour)
+
+    c_date = datetime.datetime.now()
+    to_past = 24 - hour
+    index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
+                          end=c_date + datetime.timedelta(hours=hour),
+                          freq=f"{60}min")
+
+    return pd.DataFrame(np.abs(np.random.randn(24, 1)),
+                        columns=['Arrivals'],
+                        index=[pd.to_datetime(date) for date in index]
+                        )
 
 
 if __name__ == '__main__':
@@ -58,9 +67,9 @@ if __name__ == '__main__':
     ], dim=-1)
 
     model = LogNormGPpl.load_model(load_path)
-    
-    test_x = dfactory.dset[-3000:][0]
-    Y = dfactory.dset[-3000:][1]
+
+    test_x = dfactory.dset[-200:][0]
+    Y = dfactory.dset[-200:][1]
     x_plt = torch.arange(Y.size(0)).detach().cpu()
     model.eval()
     with torch.no_grad():

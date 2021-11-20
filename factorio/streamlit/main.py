@@ -1,3 +1,5 @@
+import datetime
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -29,10 +31,19 @@ if st.button('Show raw data'):
     st.subheader('Raw data')
     st.write(data)
 
-
+c_date = datetime.datetime.now()
 st.subheader('Number of pickups by hour')
-hist_values = np.histogram(data[DATE_COLUMN].dt.hour, bins=24, range=(0, 24))[0]
-st.bar_chart(hist_values)
+hour = 2
+to_past = 24 - hour
+index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
+                      end=c_date + datetime.timedelta(hours=hour),
+                      freq=f"{60}min")
+
+hist_values = pd.DataFrame(np.abs(np.random.randn(24, 1)),
+                           columns=['Arrivals'],
+                           index=[pd.to_datetime(date) for date in index]
+                           )
+st.bar_chart(hist_values, width=50)
 
 # Some number in the range 0-23
 hour_to_filter = st.slider('hour', 0, 23, 17)

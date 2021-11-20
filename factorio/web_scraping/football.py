@@ -81,10 +81,11 @@ if __name__ == '__main__':
 
     with open(config_file) as json_file:
         c = json.load(json_file)
-            
+
     football = Football(c)
 
-    hourly_visitors = football.get_visitors()
+    hourly_visitors = football.get_visitors(start_date=datetime(2020, 11, 19),
+                                            end_date=datetime(2021, 11, 21))
 
     for date, visitiors in hourly_visitors.items():
         print(str(date) + " | " + str(visitiors))
