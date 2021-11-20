@@ -12,8 +12,15 @@ from factorio.utils.helpers import percentiles_from_samples
 def get_current_prediction(dsfactory: data_loader.DataFactory, hour: int = 2):
     current_data = dsfactory.get_future_data(hour)
 
-    return pd.DataFrame(np.random.randn(24, 1),
-                        columns=['prediction']
+    c_date = datetime.datetime.now()
+    to_past = 24 - hour
+    index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
+                          end=c_date + datetime.timedelta(hours=hour),
+                          freq=f"{60}min")
+
+    return pd.DataFrame(np.abs(np.random.randn(24, 1)),
+                        columns=['Arrivals'],
+                        index=[pd.to_datetime(date) for date in index]
                         )
 
 
