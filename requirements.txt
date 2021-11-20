@@ -10,3 +10,5 @@ meteostat>=1.5.10
 beautifulsoup4>=4.10.0
 scikit-learn>=0.24.2
 pyro-ppl
+pytorch_lightning
+ax-platform

@@ -25,7 +25,7 @@ class GpProblem:
         self.num_particles = num_particles
         self.dtype = torch.float
         self.loader_batch_size = 15000
-        self.learning_rate = 0.0001
+        self.learning_rate = 0.01
         self.num_inducing = 164
 
     def run_experiment(self, params_dict, use_gpu):
@@ -43,7 +43,6 @@ class GpProblem:
 
         train_dataset, _ = cv_datasets[0]
         dlen = len(self.dset)
-        loader = DataLoader(train_dataset, shuffle=True, batch_size=self.loader_batch_size)
         loader = DataLoader(
             Subset(self.dset, torch.arange(dlen - 1000, dlen) - 1),
             batch_size=self.loader_batch_size,
@@ -70,7 +69,7 @@ class GpProblem:
             enable_logger=True,
             use_gpu=use_gpu)
 
-        res = model.eval_performance(cv_datasets[1])
+        res = model.eval_performance(cv_datasets)
 
         return {
             'lpd': torch.std_mean(res['lpd']),
@@ -105,9 +104,9 @@ class GpProblem:
             'mae': ((aggregated_res['mae'][:, 0].mean()).item(), norm(aggregated_res['mae'][:, 1]).item()),
             'maxabserr': (
                 (aggregated_res['maxabserr'][:, 0].mean()).item(), norm(aggregated_res['maxabserr'][:, 1]).item()),
-            'err_last_day': (
-                (aggregated_res['err_last_day'][:, 0].mean()).item(),
-                norm(aggregated_res['err_last_day'][:, 1]).item()),
+            'err_last_sample': (
+                (aggregated_res['err_last_sample'][:, 0].mean()).item(),
+                norm(aggregated_res['err_last_sample'][:, 1]).item()),
             'lpd_min': (aggregated_res['lpd_min'][:, 0].min().item(), norm(aggregated_res['lpd_min'][:, 1]).item()),
             'rmse_max': (
                 (aggregated_res['rmse_max'][:, 0].max()).item(), norm(aggregated_res['rmse_max'][:, 1]).item()),
@@ -115,6 +114,6 @@ class GpProblem:
             'maxabserr_max': (
                 (aggregated_res['maxabserr_max'][:, 0].max()).item(),
                 norm(aggregated_res['maxabserr_max'][:, 1]).item()),
-            'err_last_day_max': ((aggregated_res['err_last_day_max'][:, 0].max()).item(),
-                                 norm(aggregated_res['err_last_day_max'][:, 1]).item()),
+            'err_last_sample_max': ((aggregated_res['err_last_sample_max'][:, 0].max()).item(),
+                                    norm(aggregated_res['err_last_sample_max'][:, 1]).item()),
         }

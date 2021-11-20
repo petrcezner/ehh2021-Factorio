@@ -14,6 +14,10 @@ from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from factorio.gpmodels.gppoisson import RateGP
 from pathlib import Path
 
+import os
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 
 class RateGPpl(LightningModule):
     def __init__(self,
@@ -53,7 +57,7 @@ class RateGPpl(LightningModule):
     def training_step(self, batch, batch_idx, *args, **kwargs):
         tr_x, tr_y = batch
         self.zero_grad()
-        loss = torch.as_tensor(self.svi.step(tr_x, tr_y))
+        loss = torch.as_tensor(self.svi.step(tr_x, tr_y)).norm()
         # Output from model
         self.log('train_loss', loss, on_step=False,
                  on_epoch=True, prog_bar=True, logger=True)
@@ -67,8 +71,8 @@ class RateGPpl(LightningModule):
             self.eval()
             with torch.no_grad():
                 output = self(x)
-            lpd = self.log_prob(x, y)
-            y_hat = Poisson(output).mean
+            lpd = self.gp.log_prob(x, y)
+            y_hat = Poisson(output.mean.exp()).mean
             y_err = y - y_hat
             mae = (y_err.abs() / y).mean()
             maxabserr = (y_err.abs() / y).max()
@@ -80,7 +84,7 @@ class RateGPpl(LightningModule):
                 'rmse': rmse,
                 'maxabserr': maxabserr,
                 'mae': mae,
-                'err_last_day': err_last_sample,
+                'err_last_sample': err_last_sample,
             }
             results.append(res)
 
@@ -101,7 +105,7 @@ class RateGPpl(LightningModule):
         loaded_state_dict = torch.load(load_path)
         loaded_inducing_points = loaded_state_dict['gp.variational_strategy.inducing_points']
         model = cls(inducing_points=loaded_inducing_points,
-                        num_particles=num_particles)
+                    num_particles=num_particles)
         model.load_state_dict(loaded_state_dict)
         return model
 

@@ -1,5 +1,7 @@
 import math
 from typing import Tuple
+
+from gpytorch.utils.errors import NotPSDError
 from pyro.distributions import constraints
 import pyro.distributions as dist
 import torch
@@ -94,7 +96,7 @@ class RateGP(gpytorch.models.ApproximateGP):
     def log_prob(self, x, y):
         output = self(x)
         mean = output.mean
-        return Poisson(mean).log_prob(y)
+        return Poisson(mean.exp()).log_prob(y)
 
     def fit(self, tr_x, tr_y, num_iter=100, num_particles=256):
         optimizer = pyro.optim.Adam({"lr": 0.01})

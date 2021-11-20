@@ -13,7 +13,6 @@ from factorio.gpmodels.gppoissonpl import RateGPpl, fit
 from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
 
-
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import argparse
@@ -60,7 +59,7 @@ if __name__ == '__main__':
 
     dlen = len(dfactory.dset)
     loader = DataLoader(
-        Subset(dfactory.dset, torch.arange(dlen-1000, dlen)-1),
+        Subset(dfactory.dset, torch.arange(dlen - 1000, dlen) - 1),
         batch_size=loader_batch_size,
         shuffle=True
     )
@@ -76,7 +75,7 @@ if __name__ == '__main__':
         verbose=False,
         enable_checkpointing=slow_mode,
         enable_logger=True)
-    
+
     model.save_model(output_path)
 
     test_x = dfactory.dset[-200:][0]
