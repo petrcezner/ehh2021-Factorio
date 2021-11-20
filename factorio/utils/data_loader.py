@@ -5,6 +5,8 @@ import warnings
 
 from factorio.utils.hack_config import HackConfig
 
+from factorio.web_scraping.football import Football
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import matplotlib.pyplot as plt
 import numpy as np
@@ -40,7 +42,9 @@ class DataFactory:
         time_data.set_index('ambulanceLocation__first__dispatchingEtaTs', inplace=True, drop=True)
         hour_rate = time_data.resample(f'{data_frequency}min').count().loc[datetime.datetime(2020, 8, 31):]
         # hour_rate['timedelta'] = np.linspace(0, 1000, hour_rate.shape[0])
-        x = self.load_weather(pd.to_datetime(hour_rate.index.values[-1])).to(dtype=dtype)
+        end_date = pd.to_datetime(hour_rate.index.values[-1])
+        x = self.load_weather(end_date).to(dtype=dtype)
+        self.load_football(end_date)
         # x = torch.cat([torch.as_tensor(hour_rate['timedelta'].values).unsqueeze(1), x], dim=1)
         y = torch.as_tensor(hour_rate['cases'].values).to(dtype=dtype)
         return TensorDataset(x, y)
@@ -57,6 +61,13 @@ class DataFactory:
         self.scaler.fit(data.values)
         transformed_values = self.scaler.transform(data.values)
         return torch.as_tensor(transformed_values)
+
+    def load_football(self, end_date):
+        football = Football()
+
+        hourly_visitors = football.get_visitors()
+        df = pd.DataFrame.from_dict(hourly_visitors, orient='index')
+        k = 1
 
     def get_min_max(self):
         return self.dset[:][0].min(dim=0)[0].tolist(), self.dset[:][0].max(dim=0)[0].tolist()

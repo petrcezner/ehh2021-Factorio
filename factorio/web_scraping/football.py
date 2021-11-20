@@ -14,18 +14,17 @@ class Football:
         with open(config_file) as json_file:
             c = json.load(json_file)
 
-        self.__teams            = c["teams"]
-        self.__capacity_ratio   = capacity_ratio
-        self.__hours_per_match  = hours_per_match
-
+        self.__teams = c["teams"]
+        self.__capacity_ratio = capacity_ratio
+        self.__hours_per_match = hours_per_match
 
     def get_visitors(self,
-                      start_date=datetime(2020, 8, 31),
-                      end_date=datetime(2021, 11, 18, 23, 59)):
+                     start_date=datetime(2020, 8, 31),
+                     end_date=datetime(2021, 11, 18, 23, 59)):
 
         # get all matches
         matches = {}
-        for i in range(start_date.year+1, end_date.year+2):
+        for i in range(start_date.year + 1, end_date.year + 2):
             new_matches = self.__get_visitors_date(str(i))
             matches.update(new_matches)
             print(i)
@@ -51,7 +50,7 @@ class Football:
         for job_element in job_elements:
             date_element = job_element.find("td", class_="date")
             date = date_element.find("span", class_="hidden-sm hidden-md hidden-lg").text
-            #split to date
+            # split to date
             x = date.split(", ")
             date = x[0].split("/")
             day = int(date[0])
@@ -70,7 +69,8 @@ class Football:
                     capacity = team["capacity"]
                     for i in range(0, self.__hours_per_match):
                         actual_hour = start_hour + i
-                        events[datetime(year, month, day, actual_hour, start_minute)] = int(capacity * self.__capacity_ratio)
+                        events[datetime(year, month, day, actual_hour, start_minute)] = int(
+                            capacity * self.__capacity_ratio)
 
         return events
 
@@ -86,5 +86,5 @@ if __name__ == '__main__':
 
     hourly_visitors = football.get_visitors()
 
-    for date,visitiors in hourly_visitors.items():
+    for date, visitiors in hourly_visitors.items():
         print(str(date) + " | " + str(visitiors))
