@@ -50,15 +50,12 @@ if __name__ == '__main__':
         torch.linspace(minimum, maximum, num_inducing, dtype=dtype)
         for minimum, maximum in zip(X_mins, X_maxs)
     ], dim=-1)
-    
-    loaded_state_dict = torch.load(load_path)
-    loaded_inducing_points = loaded_state_dict['gp.variational_strategy.inducing_points']
-    model = RateGPpl(inducing_points=my_inducing_pts,
-                     num_particles=num_particles)
-    model.load_state_dict(loaded_state_dict)
+
+    model = RateGPpl.load_model(load_path)
     
     test_x = dfactory.dset[-1000:][0]
     Y = dfactory.dset[-1000:][1]
+    x_plt = torch.arange(Y.size(0)).detach().cpu()
     model.eval()
     with torch.no_grad():
         output = model(test_x)
@@ -73,19 +70,19 @@ if __name__ == '__main__':
     # visualize the result
     fig, (ax_func, ax_samp) = plt.subplots(1, 2, figsize=(12, 3))
     line = ax_func.plot(
-        test_x[:, 0], fn_mean.detach().cpu(), label='GP prediction')
+        x_plt, fn_mean.detach().cpu(), label='GP prediction')
     ax_func.fill_between(
-        test_x[:, 0], lower.detach().cpu().numpy(),
+        x_plt, lower.detach().cpu().numpy(),
         upper.detach().cpu().numpy(), color=line[0].get_color(), alpha=0.5
     )
     ax_func.legend()
 
-    ax_samp.scatter(test_x[:, 0], Y, alpha=0.5,
+    ax_samp.scatter(x_plt, Y, alpha=0.5,
                     label='True train data', color='orange')
-    y_sim_plt = ax_samp.plot(test_x[:, 0], y_sim_mean.cpu(
+    y_sim_plt = ax_samp.plot(x_plt, y_sim_mean.cpu(
     ).detach(), alpha=0.5, label='Sample mean from the model')
     ax_samp.fill_between(
-        test_x[:, 0], y_sim_lower.detach().cpu(),
+        x_plt, y_sim_lower.detach().cpu(),
         y_sim_upper.detach().cpu(), color=y_sim_plt[0].get_color(), alpha=0.5
     )
     ax_samp.legend()

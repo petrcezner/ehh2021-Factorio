@@ -21,10 +21,10 @@ if __name__ == '__main__':
     # Move to config at some point
     dtype = torch.float
     num_inducing = 32
-    num_iter = 1
+    num_iter = 1000
     num_particles = 32
     loader_batch_size = 512
-    slow_mode = True  # enables checkpointing and logging
+    slow_mode = False  # enables checkpointing and logging
 
     time_now = datetime.datetime.utcnow()
     parser = argparse.ArgumentParser()
@@ -50,13 +50,13 @@ if __name__ == '__main__':
         torch.linspace(minimum, maximum, num_inducing, dtype=dtype)
         for minimum, maximum in zip(X_mins, X_maxs)
     ], dim=-1)
-    model = RateGPpl(inducing_points=my_inducing_pts,
-                     num_particles=num_particles)
     loader = DataLoader(
         dfactory.dset,
         batch_size=loader_batch_size,
         shuffle=True
     )
+    model = RateGPpl(inducing_points=my_inducing_pts,
+                     num_particles=num_particles)
 
     fit(model,
         train_dataloader=loader,
@@ -66,7 +66,7 @@ if __name__ == '__main__':
         enable_checkpointing=slow_mode,
         enable_logger=True)
     
-    torch.save(model.state_dict(), output_path)
+    model.save_model(output_path)
 
     test_x = dfactory.dset[-1000:][0]
     Y = dfactory.dset[-1000:][1]
