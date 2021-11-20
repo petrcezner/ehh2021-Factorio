@@ -3,6 +3,8 @@ import datetime
 from pathlib import Path
 import warnings
 
+from factorio.utils.hack_config import HackConfig
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import matplotlib.pyplot as plt
 import numpy as np
@@ -66,23 +68,6 @@ class DataFactory:
 def load_data(data_path):
     data = pd.read_json(data_path, lines=True)
     return data
-
-
-class HackConfig:
-    def __init__(self, z_case, data_frequency):
-        self.z_case = z_case
-        self.data_frequency = data_frequency
-
-    @classmethod
-    def from_config(cls, config_file):
-        config = configparser.ConfigParser()
-        config.read(config_file)
-
-        z_case = Path(config['IKEM'].get('data_path'))
-        data_frequency = config['IKEM'].getint('data_frequency', fallback=60)
-
-        return cls(z_case=z_case,
-                   data_frequency=data_frequency)
 
 
 if __name__ == '__main__':

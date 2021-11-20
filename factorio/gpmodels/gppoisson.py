@@ -17,8 +17,9 @@ class RateGP(gpytorch.models.ApproximateGP):
     def __init__(self,
                  inducing_points: torch.Tensor,
                  name_prefix="rate_exact_gp",
-                 learn_inducing_locations = False,
-                 lb_periodicity = 0):
+                 learn_inducing_locations=False,
+                 lb_periodicity=0,
+                 kernel=None):
         self.name_prefix = name_prefix
         # Define all the variational stuff
         num_inducing = inducing_points.size(0)
@@ -35,9 +36,11 @@ class RateGP(gpytorch.models.ApproximateGP):
 
         # Mean, covar, likelihood
         self.mean_module = gpytorch.means.ConstantMean(ard_num_dims=ard_num_dims)
-        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.MaternKernel(nu=1.5, ard_num_dims=ard_num_dims)) #\
-            # + gpytorch.kernels.ScaleKernel(gpytorch.kernels.PeriodicKernel(
-            #     period_length_constraint= gpytorch.constraints.GreaterThan(lb_periodicity)))
+        if kernel is None:
+            kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.MaternKernel(nu=1.5, ard_num_dims=ard_num_dims))
+        self.covar_module = kernel  # \
+        # + gpytorch.kernels.ScaleKernel(gpytorch.kernels.PeriodicKernel(
+        #     period_length_constraint= gpytorch.constraints.GreaterThan(lb_periodicity)))
 
     def forward(self, x):
         mean = self.mean_module(x)
@@ -88,7 +91,12 @@ class RateGP(gpytorch.models.ApproximateGP):
                 obs=y
             )
 
-    def fit(self, tr_x, tr_y, num_iter = 100, num_particles = 256):
+    def log_prob(self, x, y):
+        output = self(x)
+        mean = output.mean
+        return Poisson(mean).log_prob(y)
+
+    def fit(self, tr_x, tr_y, num_iter=100, num_particles=256):
         optimizer = pyro.optim.Adam({"lr": 0.01})
         elbo = pyro.infer.Trace_ELBO(num_particles=num_particles, vectorize_particles=True, retain_graph=True)
         svi = pyro.infer.SVI(self.model, self.guide, optimizer, elbo)
@@ -101,7 +109,7 @@ class RateGP(gpytorch.models.ApproximateGP):
             batch_size=256,
             shuffle=True
         )
-        
+
         self.train()
         iterator = trange(num_iter)
         for i in iterator:
@@ -111,7 +119,7 @@ class RateGP(gpytorch.models.ApproximateGP):
                 iterator.set_postfix(
                     loss=loss,
                     # lengthscale=self.covar_module.base_kernel.lengthscale.item(),
-                    )
+                )
 
 
 if __name__ == '__main__':
@@ -131,9 +139,9 @@ if __name__ == '__main__':
 
     # X = torch.linspace(time_range[0], time_range[1], NSamp)
     X = torch.stack([
-                torch.linspace(time_range[0], time_range[1], NSamp),
-                torch.randn(NSamp)
-        ], dim=-1).float()
+        torch.linspace(time_range[0], time_range[1], NSamp),
+        torch.randn(NSamp)
+    ], dim=-1).float()
     fx = lat_fn(X[:, 0])
     Y = obs_fn(fx).float()
 
@@ -149,19 +157,19 @@ if __name__ == '__main__':
     plt.show()
 
     my_inducing_pts = torch.stack([
-                torch.linspace(time_range[0], time_range[1], 32),
-                torch.randn(32)
-        ], dim=-1)
+        torch.linspace(time_range[0], time_range[1], 32),
+        torch.randn(32)
+    ], dim=-1)
     model = RateGP(inducing_points=my_inducing_pts)
     model.fit(X, Y, num_iter=1000, num_particles=64)
 
     # define test set (optionally on GPU)
-    denser = 2 # make test set 2 times denser then the training set
+    denser = 2  # make test set 2 times denser then the training set
     # test_x = torch.linspace(time_range[0], 2*time_range[1], denser * NSamp).float()#.cuda()
     test_x = torch.stack([
-                torch.linspace(time_range[0], 2*time_range[1], denser * NSamp),
-                torch.randn(denser * NSamp)
-        ], dim=-1).float()#.cuda()
+        torch.linspace(time_range[0], 2 * time_range[1], denser * NSamp),
+        torch.randn(denser * NSamp)
+    ], dim=-1).float()  # .cuda()
 
     model.eval()
     with torch.no_grad():
@@ -173,7 +181,6 @@ if __name__ == '__main__':
     lower, fn_mean, upper = percentiles_from_samples(samples)
 
     y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(Poisson(samples.exp()).sample())
-
 
     # y_sim = obs_fn(fn_mean)
 
@@ -189,7 +196,7 @@ if __name__ == '__main__':
     ax_func.legend()
 
     # sample from p(y|D,x) = \int p(y|f) p(f|D,x) df (doubly stochastic)
-    ax_samp.scatter(X[:, 0], Y, alpha = 0.5, label='True train data', color='orange')
+    ax_samp.scatter(X[:, 0], Y, alpha=0.5, label='True train data', color='orange')
     # ax_samp.plot(test_x[:, 0], y_sim.cpu().detach(), alpha=0.5, label='Mean from the model')
     y_sim_plt = ax_samp.plot(test_x[:, 0], y_sim_mean.cpu().detach(), alpha=0.5, label='Sample from the model')
     ax_samp.fill_between(
