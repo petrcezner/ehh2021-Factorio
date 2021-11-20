@@ -21,13 +21,13 @@ if __name__ == '__main__':
 
     # Move to config at some point
     dtype = torch.float
-    num_inducing = 64
-    num_iter = 2
-    num_particles = 32
+    num_inducing = 32
+    num_iter = 1000
+    num_particles = 16
     loader_batch_size = 15000
     learn_inducing_locations = True
     slow_mode = False  # enables checkpointing and logging
-    learning_rate = 0.001
+    learning_rate = 0.01
 
     time_now = datetime.datetime.utcnow()
     parser = argparse.ArgumentParser()
@@ -56,7 +56,8 @@ if __name__ == '__main__':
 
     dlen = len(dfactory.dset)
     loader = DataLoader(
-        Subset(dfactory.dset, torch.arange(dlen-1000, dlen)-1),
+        # dfactory.dset,
+        Subset(dfactory.dset, torch.arange(dlen-1000, dlen-100)-1),
         batch_size=loader_batch_size,
         shuffle=True
     )
@@ -86,11 +87,15 @@ if __name__ == '__main__':
         output = model(test_x)
 
     # Similarly get the 5th and 95th percentiles
-    samples = model.gp.likelihood(output.mean).rsample(torch.Size([1000]))
-    lower, fn_mean, upper = percentiles_from_samples(samples)
+    lat_samples = output.rsample(torch.Size([1000])).exp()
 
-    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(
-        Poisson(samples).sample())
+    # Similarly get the 5th and 95th percentiles
+    samples = model.gp.likelihood(output.mean).rsample(torch.Size([1000]))
+    lower, fn_mean, upper = percentiles_from_samples(lat_samples, [.16, 0.5, 0.84])
+    # lower, upper = output.confidence_region()
+    fn_mean = output.mean.exp()
+
+    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(samples, [.25, 0.5, 0.75])
 
     # visualize the result
     fig, (ax_func, ax_samp) = plt.subplots(1, 2, figsize=(12, 3))

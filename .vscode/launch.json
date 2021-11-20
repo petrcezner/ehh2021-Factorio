@@ -33,7 +33,7 @@
             "request": "launch",
             "program": "factorio/core/run_load_model.py",
             "console": "integratedTerminal",
-            "args": ["-c", "mnt/config.ini", "-i", "mnt/mdl.pth"]
+            "args": ["-c", "mnt/config.ini", "-i", "mnt/mdl_long.pth"]
         }
     ]
 }

@@ -59,23 +59,25 @@ if __name__ == '__main__':
 
     model = LogNormGPpl.load_model(load_path)
     
-    test_x = dfactory.dset[-1000:][0]
-    Y = dfactory.dset[-1000:][1]
+    test_x = dfactory.dset[-200:][0]
+    Y = dfactory.dset[-200:][1]
     x_plt = torch.arange(Y.size(0)).detach().cpu()
     model.eval()
     with torch.no_grad():
         output = model(test_x)
 
     # Similarly get the 5th and 95th percentiles
-    lat_samples = output.rsample(torch.Size([1000])).exp()
+    lat_samples = output.rsample(torch.Size([100])).exp()
+    samples_expanded = model.gp.likelihood(lat_samples).rsample(torch.Size([10]))
+    samples = samples_expanded.view(samples_expanded.size(0)*samples_expanded.size(1), -1)
 
     # Similarly get the 5th and 95th percentiles
-    samples = model.gp.likelihood(output.mean).rsample(torch.Size([1000]))
+    # samples = model.gp.likelihood(output.mean).rsample(torch.Size([1000]))
     lower, fn_mean, upper = percentiles_from_samples(lat_samples, [.16, 0.5, 0.84])
     # lower, upper = output.confidence_region()
     fn_mean = output.mean.exp()
 
-    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(samples, [.25, 0.5, 0.75])
+    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(samples, [.16, 0.5, 0.84])
 
     # visualize the result
     fig, (ax_func, ax_samp) = plt.subplots(1, 2, figsize=(12, 3))
