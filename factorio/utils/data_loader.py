@@ -32,6 +32,7 @@ class DataFactory:
         self.covid_source = r'https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19/'
         self.data_folder = data_folder
         self.scaler = MinMaxScaler()
+        self.end_date = datetime.datetime(2021, 11, 15, 23, 0, 0)
         self.dset = self.create_timestamp(data, dtype=dtype)
 
     def create_timestamp(self, data, dtype=torch.float):
@@ -47,10 +48,11 @@ class DataFactory:
             if row['ambulanceLocation__first__dispatchingEtaTs'] is pd.NaT:
                 time_data.loc[i, 'ambulanceLocation__first__dispatchingEtaTs'] = time_data.loc[i, 'dispatchingTs']
         time_data.set_index('ambulanceLocation__first__dispatchingEtaTs', inplace=True, drop=True)
-        hour_rate = time_data.resample(f'{self.data_frequency}min').count().loc[datetime.datetime(2020, 8, 31, 16):]
-        end_date = pd.to_datetime(hour_rate.index.values[-1])
+        hour_rate = time_data.resample(f'{self.data_frequency}min').count().loc[
+                    datetime.datetime(2020, 8, 31, 16):self.end_date]
+        # end_date = pd.to_datetime(hour_rate.index.values[-1])
         x = self.load_weather(start_date=datetime.datetime(2020, 8, 31, 16),
-                              end_date=end_date).to(dtype=dtype)
+                              end_date=self.end_date).to(dtype=dtype)
         y = torch.as_tensor(hour_rate['cases'].values).to(dtype=dtype)
         return TensorDataset(x, y)
 
@@ -65,17 +67,8 @@ class DataFactory:
         selected_data.insert(2, 'month', selected_data.index.month)
 
         football = self.load_football(start_date, end_date)
-        g_reports = [str(self.data_folder / '2020_CZ_Region_Mobility_Report.csv'),
-                     str(self.data_folder / '2021_CZ_Region_Mobility_Report.csv')]
-        # a_datafile = str(self.data_folder / 'applemobilitytrends-2021-11-18.csv')
-        # w_datafile = str(self.data_folder / "Waze _ COVID-19 Impact Dashboard_City-Level Data_Table.csv")
-        google_m = MobilityGoogle(reports=g_reports)
-        # apple_m = MobilityApple(datafile=a_datafile)
-        # waze_m = MobilityWaze(datafile=w_datafile)
-        google = pd.DataFrame.from_dict(google_m.get_mobility(), orient='index')
-        google = google[start_date:end_date]
-        # apple = pd.DataFrame.from_dict(apple_m.get_mobility(), orient='index')
-        # waze = pd.DataFrame.from_dict(waze_m.get_mobility(), orient='index')
+        google, apple, waze = self.__load_mobility(start_date, end_date)
+
         incidence = self.__load_incidence(start_date, end_date)
         selected_data.insert(6, 'football', football.values)
         selected_data.insert(7,
@@ -84,10 +77,36 @@ class DataFactory:
         selected_data.insert(8,
                              'residential_percent_change_from_baseline',
                              google['residential_percent_change_from_baseline'].values)
-        selected_data.insert(9, 'incidence_7_100000', incidence['incidence_7_100000'].values)
+        selected_data.insert(9, 'waze mobilty', waze[0].values)
+        selected_data.insert(10, 'apple mobility', apple[0].values)
+        selected_data.insert(11, 'incidence_7_100000', incidence['incidence_7_100000'].values)
         self.scaler.fit(selected_data.values)
         transformed_values = self.scaler.transform(selected_data.values)
         return torch.as_tensor(transformed_values)
+
+    def __load_mobility(self, start_date, end_date):
+        g_reports = [str(self.data_folder / '2020_CZ_Region_Mobility_Report.csv'),
+                     str(self.data_folder / '2021_CZ_Region_Mobility_Report.csv')]
+        a_datafile = str(self.data_folder / 'applemobilitytrends-2021-11-18.csv')
+        w_datafile = str(self.data_folder / "Waze _ COVID-19 Impact Dashboard_City-Level Data_Table.csv")
+
+        google_m = MobilityGoogle(reports=g_reports)
+        apple_m = MobilityApple(datafile=a_datafile)
+        waze_m = MobilityWaze(datafile=w_datafile)
+
+        google = pd.DataFrame.from_dict(google_m.get_mobility(), orient='index')
+        google = google[start_date:end_date]
+
+        apple = pd.DataFrame.from_dict(apple_m.get_mobility(), orient='index')
+        apple = apple[start_date:end_date]
+
+        waze = pd.DataFrame.from_dict(waze_m.get_mobility(), orient='index')
+        waze = waze[start_date:end_date]
+        apple.fillna(0, inplace=True)
+        waze = waze.resample(f'{self.data_frequency}min').ffill()
+        apple = apple.resample(f'{self.data_frequency}min').ffill()
+        google = google.resample(f'{self.data_frequency}min').ffill()
+        return google, apple, waze
 
     def __load_incidence(self, start_date, end_date):
         data_incidence = pd.read_csv(rf'{self.covid_source}incidence-7-14-cr.csv')
@@ -101,7 +120,7 @@ class DataFactory:
 
         hourly_visitors = football.get_visitors()
         df = pd.DataFrame.from_dict(hourly_visitors, orient='index')
-        return df[start_date:end_date]
+        return df.resample(f'{self.data_frequency}min').ffill()[start_date:end_date]
 
     def get_min_max(self):
         return self.dset[:][0].min(dim=0)[0].tolist(), self.dset[:][0].max(dim=0)[0].tolist()

@@ -13,97 +13,37 @@ from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from factorio.gpmodels.gppoisson import RateGP
 from pathlib import Path
+from factorio.gpmodels.gplognorm import LogNormGP
+from factorio.gpmodels.gppoissonpl import RateGPpl
 
 
-class RateGPpl(LightningModule):
+class LogNormGPpl(RateGPpl):
     def __init__(self,
                  inducing_points: torch.Tensor,
                  name_prefix="mixture_gp",
                  learn_inducing_locations=False,
+                 lb_periodicity=0,
                  lr=0.01,
                  num_particles=64,
                  kernel=None):
-        super().__init__()
-        self.automatic_optimization = False
-
-        self.gp = RateGP(inducing_points=inducing_points,
+        super().__init__(inducing_points=inducing_points,
                          name_prefix=name_prefix,
                          learn_inducing_locations=learn_inducing_locations,
+                         lb_periodicity=lb_periodicity,
+                         lr=lr,
+                         num_particles=num_particles,
                          kernel=kernel)
-        self.lr = lr
-        self.num_particles = num_particles
-        self.save_hyperparameters()
+        self.automatic_optimization = False
 
-    def forward(self, x):
-        output = self.gp(x)
-        return output
+        self.gp = LogNormGP(inducing_points=inducing_points,
+                            name_prefix=name_prefix,
+                            learn_inducing_locations=learn_inducing_locations,
+                            lb_periodicity=lb_periodicity,
+                         kernel=kernel)
+        self.save_hyperparameters()
 
     # def predict(self, X):
     #     return self.gp.predict(X)
-
-    def configure_optimizers(self):
-        optimizer = pyro.optim.Adam({"lr": 0.01})
-        elbo = pyro.infer.TraceGraph_ELBO(
-            num_particles=self.num_particles, vectorize_particles=True, retain_graph=True)
-        self.svi = pyro.infer.SVI(
-            self.gp.model, self.gp.guide, optimizer, elbo)
-        self.train()
-        return None
-
-    def training_step(self, batch, batch_idx, *args, **kwargs):
-        tr_x, tr_y = batch
-        self.zero_grad()
-        loss = torch.as_tensor(self.svi.step(tr_x, tr_y))
-        # Output from model
-        self.log('train_loss', loss, on_step=False,
-                 on_epoch=True, prog_bar=True, logger=True)
-        return {'loss': loss, 'log': {'train_loss': loss}}
-
-    def eval_performance(self, val_dset: Iterable[Tuple[Dataset, Dataset]]):
-        results = []
-
-        for tr, val in val_dset:
-            x, y = val[:]
-            self.eval()
-            with torch.no_grad():
-                output = self(x)
-            lpd = self.log_prob(x, y)
-            y_hat = Poisson(output).mean
-            y_err = y - y_hat
-            mae = (y_err.abs() / y).mean()
-            maxabserr = (y_err.abs() / y).max()
-            rmse = y_err.norm() / y.norm()
-            err_last_sample = y_err[-1].abs() / y[-1]
-
-            res = {
-                'lpd': lpd,
-                'rmse': rmse,
-                'maxabserr': maxabserr,
-                'mae': mae,
-                'err_last_day': err_last_sample,
-            }
-            results.append(res)
-
-        res_dict = {}
-        keys = res.keys()
-        for key in keys:
-            res_dict[key] = torch.stack([
-                res[key]
-                for res in results
-            ])
-        return res_dict
-
-    def save_model(self, save_path):
-        torch.save(self.state_dict(), save_path)
-
-    @classmethod
-    def load_model(cls, load_path, num_particles=32):
-        loaded_state_dict = torch.load(load_path)
-        loaded_inducing_points = loaded_state_dict['gp.variational_strategy.inducing_points']
-        model = cls(inducing_points=loaded_inducing_points,
-                        num_particles=num_particles)
-        model.load_state_dict(loaded_state_dict)
-        return model
 
 
 def fit(module,
