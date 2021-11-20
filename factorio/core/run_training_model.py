@@ -57,7 +57,7 @@ if __name__ == '__main__':
     dlen = len(dfactory.dset)
     loader = DataLoader(
         # dfactory.dset,
-        Subset(dfactory.dset, torch.arange(dlen-1000, dlen-100)-1),
+        Subset(dfactory.dset, torch.arange(dlen-1000, dlen-100)-5000),
         batch_size=loader_batch_size,
         shuffle=True
     )

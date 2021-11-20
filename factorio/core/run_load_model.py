@@ -73,11 +73,11 @@ if __name__ == '__main__':
 
     # Similarly get the 5th and 95th percentiles
     # samples = model.gp.likelihood(output.mean).rsample(torch.Size([1000]))
-    lower, fn_mean, upper = percentiles_from_samples(lat_samples, [.16, 0.5, 0.84])
+    lower, fn_mean, upper = percentiles_from_samples(lat_samples, [.05, 0.5, 0.8])
     # lower, upper = output.confidence_region()
-    fn_mean = output.mean.exp()
+    # fn_mean = output.mean.exp()
 
-    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(samples, [.16, 0.5, 0.84])
+    y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(samples, [.05, 0.5, 0.8])
 
     # visualize the result
     fig, (ax_func, ax_samp) = plt.subplots(1, 2, figsize=(12, 3))
