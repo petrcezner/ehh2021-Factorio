@@ -25,7 +25,6 @@ class LogNormGP(gpytorch.models.pyro.PyroGP):
                  kernel=None,
                  num_data=100):
         self.name_prefix = name_prefix
-        num_tasks = 2  # mean and stdvar of exponentiated distrib
         # Define all the variational stuff
         inducing_points = torch.stack([
             torch.linspace(minimum, maximum, num_inducing)
@@ -100,17 +99,7 @@ class LogNormLikelihood(gpytorch.likelihoods.Likelihood):
         # self.register_parameter("variational_cluster_logits", torch.nn.Parameter(torch.randn(num_tasks, num_clusters)))
 
         # # The Gaussian observational noise
-        self.register_parameter("raw_noise", torch.nn.Parameter(torch.tensor(-5.0)))
-
-        # Other info
-        # self.num_tasks = num_tasks
-        # self.max_plate_nesting = 1
-
-    # def pyro_guide(self, function_dist, target):
-    #     return super().pyro_guide(function_dist, target)
-
-    # def pyro_model(self, function_dist, target):
-    #     return super().pyro_model(function_dist, target)
+        self.register_parameter("raw_noise", torch.nn.Parameter(torch.tensor(-2.5)))
 
     def forward(self, function_samples):
         locs = function_samples.exp()
