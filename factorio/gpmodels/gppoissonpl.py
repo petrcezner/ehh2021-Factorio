@@ -1,10 +1,10 @@
 import math
-from typing import Tuple
+from typing import Tuple, Iterable
 import gpytorch
 import pyro
 import torch
 from torch.distributions.poisson import Poisson
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import TensorDataset, DataLoader, Dataset
 from torch.functional import Tensor
 import torch.optim as optim
 from gpytorch.mlls import VariationalELBO, PredictiveLogLikelihood
@@ -22,14 +22,16 @@ class RateGPpl(LightningModule):
                  learn_inducing_locations=False,
                  lb_periodicity=0,
                  lr=0.01,
-                 num_particles=64):
+                 num_particles=64,
+                 kernel=None):
         super().__init__()
         self.automatic_optimization = False
 
         self.gp = RateGP(inducing_points=inducing_points,
                          name_prefix=name_prefix,
                          learn_inducing_locations=learn_inducing_locations,
-                         lb_periodicity=lb_periodicity)
+                         lb_periodicity=lb_periodicity,
+                         kernel=kernel)
         self.lr = lr
         self.num_particles = num_particles
         self.save_hyperparameters()
@@ -59,6 +61,52 @@ class RateGPpl(LightningModule):
                  on_epoch=True, prog_bar=True, logger=True)
         return {'loss': loss, 'log': {'train_loss': loss}}
 
+    def eval_performance(self, val_dset: Iterable[Tuple[Dataset, Dataset]]):
+        results = []
+
+        for tr, val in val_dset:
+            x, y = val[:]
+            self.eval()
+            with torch.no_grad():
+                output = self(x)
+            lpd = self.log_prob(x, y)
+            y_hat = Poisson(output).mean
+            y_err = y - y_hat
+            mae = (y_err.abs() / y).mean()
+            maxabserr = (y_err.abs() / y).max()
+            rmse = y_err.norm() / y.norm()
+            err_last_sample = y_err[-1].abs() / y[-1]
+
+            res = {
+                'lpd': lpd,
+                'rmse': rmse,
+                'maxabserr': maxabserr,
+                'mae': mae,
+                'err_last_day': err_last_sample,
+            }
+            results.append(res)
+
+        res_dict = {}
+        keys = res.keys()
+        for key in keys:
+            res_dict[key] = torch.stack([
+                res[key]
+                for res in results
+            ])
+        return res_dict
+
+    def save_model(self, save_path):
+        torch.save(model.state_dict(), save_path)
+
+    @classmethod
+    def load_model(cls, load_path, num_particles=32):
+        loaded_state_dict = torch.load(load_path)
+        loaded_inducing_points = loaded_state_dict['gp.variational_strategy.inducing_points']
+        model = cls(inducing_points=loaded_inducing_points,
+                        num_particles=num_particles)
+        model.load_state_dict(loaded_state_dict)
+        return model
+
 
 def fit(module,
         train_dataloader,
@@ -67,7 +115,9 @@ def fit(module,
         min_delta=1e-4,
         verbose=True,
         enable_logger=True,
-        enable_checkpointing=True):
+        enable_checkpointing=True,
+        use_gpu=False,
+        gpus=-1):
     '''Runs training with earlystopping and constructs default trainer for you.'''
     callbacks = [
         EarlyStopping(
@@ -87,13 +137,16 @@ def fit(module,
             mode='min',
         )
         callbacks += [checkpoint_callback]
-
+    if not use_gpu:
+        gpus = 0
     # trainer = pl.Trainer(gpus=8) (if you have GPUs)
     trainer = Trainer(
         max_epochs=max_epochs,
         callbacks=callbacks,
         checkpoint_callback=enable_checkpointing,
-        logger=enable_logger
+        logger=enable_logger,
+        auto_select_gpus=use_gpu,
+        gpus=gpus,
     )
     trainer.fit(module, train_dataloader)
     # gp_state_dict = module.gp.state_dict()
@@ -106,11 +159,14 @@ if __name__ == '__main__':
 
     print(f'Run {__file__}')
 
+
     # Here we specify a 'true' latent function lambda
     def lat_fn(x): return torch.sin(2 * math.pi * x) + \
-        torch.sin(3.3 * math.pi * x)
+                          torch.sin(3.3 * math.pi * x)
+
 
     def obs_fn(x): return Poisson(x.exp()).sample()
+
 
     num_inducing = 164
     num_iter = 1000
@@ -167,7 +223,7 @@ if __name__ == '__main__':
     denser = 2  # make test set 2 times denser then the training set
     # test_x = torch.linspace(time_range[0], 2*time_range[1], denser * NSamp).float()#.cuda()
     test_x = torch.stack([
-        torch.linspace(time_range[0], 2*time_range[1], denser * NSamp),
+        torch.linspace(time_range[0], 2 * time_range[1], denser * NSamp),
         torch.randn(denser * NSamp)
     ], dim=-1).float()  # .cuda()
 
