@@ -35,7 +35,7 @@ class RepeatedTimer(object):
         self.is_running = False
 
 
-def generate_additive_kernel(kernel_names: Iterable[str],
+def generate_additive_kernel(kernel_names: Iterable,
                              ard_num_dims: int = 1):
     kers_list = [get_kernel_by_name(ker_name, ard_num_dims)
                  for ker_name in kernel_names if 'None' not in ker_name]

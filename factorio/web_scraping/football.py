@@ -6,15 +6,11 @@ from bs4 import BeautifulSoup
 
 class Football:
     def __init__(self,
-                 config_path="config.json",
+                 teams_dct,
                  capacity_ratio=0.75,
                  hours_per_match=3):
 
-        config_file = config_path
-        with open(config_file) as json_file:
-            c = json.load(json_file)
-
-        self.__teams = c["teams"]
+        self.__teams = teams_dct["teams"]
         self.__capacity_ratio = capacity_ratio
         self.__hours_per_match = hours_per_match
 
@@ -27,7 +23,6 @@ class Football:
         for i in range(start_date.year + 1, end_date.year + 2):
             new_matches = self.__get_visitors_date(str(i))
             matches.update(new_matches)
-            print(i)
 
         hourly_visitors = {}
         for single_date in self.__daterange(start_date, end_date):
@@ -82,7 +77,12 @@ class Football:
 
 
 if __name__ == '__main__':
-    football = Football()
+    config_file = 'config.json'
+
+    with open(config_file) as json_file:
+        c = json.load(json_file)
+            
+    football = Football(c)
 
     hourly_visitors = football.get_visitors()
 
