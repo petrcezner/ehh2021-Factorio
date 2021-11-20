@@ -15,7 +15,7 @@
             "name": "Train model",
             "type": "python",
             "request": "launch",
-            "program": "factorio/core/main.py",
+            "program": "factorio/core/run_training_model.py",
             "console": "integratedTerminal",
             "args": ["-c", "mnt/config.ini", "-o", "mnt/mdl.pth"]
         },
