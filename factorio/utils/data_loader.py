@@ -25,9 +25,10 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
 class DataFactory:
-    def __init__(self, data, data_frequency, hospital, teams, dtype=torch.float):
+    def __init__(self, data, data_frequency, hospital, teams, data_folder, dtype=torch.float):
         self.teams = teams
         self.hospital = hospital
+        self.data_folder = data_folder
         self.scaler = MinMaxScaler()
         self.dset = self.create_timestamp(data, data_frequency, dtype=dtype)
 
@@ -62,14 +63,24 @@ class DataFactory:
         selected_data.insert(2, 'month', selected_data.index.month)
 
         football = self.load_football(start_date, end_date)
-        # google_m = MobilityGoogle()
-        # apple_m = MobilityApple()
-        # waze_m = MobilityWaze()
-        # google = pd.DataFrame.from_dict(google_m.get_mobility(), orinet='index')
-        # apple = pd.DataFrame.from_dict(apple_m.get_mobility(), orinet='index')
-        # waze = pd.DataFrame.from_dict(apple.get_mobility(), orinet='index')
+        g_reports = [str(self.data_folder / '2020_CZ_Region_Mobility_Report.csv'),
+                     str(self.data_folder / '2021_CZ_Region_Mobility_Report.csv')]
+        # a_datafile = str(self.data_folder / 'applemobilitytrends-2021-11-18.csv')
+        # w_datafile = str(self.data_folder / "Waze _ COVID-19 Impact Dashboard_City-Level Data_Table.csv")
+        google_m = MobilityGoogle(reports=g_reports)
+        # apple_m = MobilityApple(datafile=a_datafile)
+        # waze_m = MobilityWaze(datafile=w_datafile)
+        google = pd.DataFrame.from_dict(google_m.get_mobility(), orient='index')
+        google = google[start_date:end_date]
+        # apple = pd.DataFrame.from_dict(apple_m.get_mobility(), orient='index')
+        # waze = pd.DataFrame.from_dict(waze_m.get_mobility(), orient='index')
         selected_data.insert(6, 'football', football.values)
-
+        selected_data.insert(7,
+                             'retail_and_recreation_percent_change_from_baseline',
+                             google['retail_and_recreation_percent_change_from_baseline'].values)
+        selected_data.insert(8,
+                             'residential_percent_change_from_baseline',
+                             google['residential_percent_change_from_baseline'].values)
         self.scaler.fit(selected_data.values)
         transformed_values = self.scaler.transform(selected_data.values)
         return torch.as_tensor(transformed_values)
@@ -112,5 +123,6 @@ if __name__ == '__main__':
     data_loader = DataFactory(data_,
                               hack_config.data_frequency,
                               teams=hack_config.teams,
-                              hospital=hack_config.hospital)
+                              hospital=hack_config.hospital,
+                              data_folder=hack_config.data_folder)
     print(data_loader.get_min_max())
