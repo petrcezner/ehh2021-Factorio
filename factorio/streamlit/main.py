@@ -1,14 +1,18 @@
 import datetime
 
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 import pandas as pd
 import numpy as np
+import plotly.express as px
 
 DATE_COLUMN = 'date/time'
 DATA_URL = ('https://s3-us-west-2.amazonaws.com/'
             'streamlit-demo-data/uber-raw-data-sep14.csv.gz')
 
 st.title('Patient Arrival Prediction')
+
+count = st_autorefresh(interval=900000, limit=1000, key="fizzbuzzcounter")
 
 
 @st.cache
@@ -33,8 +37,9 @@ if st.button('Show raw data'):
 
 c_date = datetime.datetime.now()
 st.subheader('Number of pickups by hour')
-hour = 2
-to_past = 24 - hour
+hour = st.slider('To Future', 0, 23, 17)
+
+to_past = 23 - hour
 index = pd.date_range(start=c_date - datetime.timedelta(hours=to_past),
                       end=c_date + datetime.timedelta(hours=hour),
                       freq=f"{60}min")
@@ -43,11 +48,18 @@ hist_values = pd.DataFrame(np.abs(np.random.randn(24, 1)),
                            columns=['Arrivals'],
                            index=[pd.to_datetime(date) for date in index]
                            )
-st.bar_chart(hist_values, width=50)
+hist_values.index.name = 'Datetime'
+width = [1 for i in range(24)]
+fig = px.bar(hist_values)
+fig.add_vrect(x0=c_date, x1=c_date + datetime.timedelta(minutes=5),
+              annotation_text="Current time", annotation_position="top left",
+              fillcolor="black", opacity=0.5, line_width=0)
+
+fig.update_yaxes(title='y', visible=False, showticklabels=False)
+st.plotly_chart(fig, use_container_width=True)
 
 # Some number in the range 0-23
-hour_to_filter = st.slider('hour', 0, 23, 17)
-filtered_data = data[data[DATE_COLUMN].dt.hour == hour_to_filter]
+filtered_data = data[data[DATE_COLUMN].dt.hour == hour]
 
-st.subheader('Map of all pickups at %s:00' % hour_to_filter)
+st.subheader('Map of all pickups at %s:00' % hour)
 st.map(filtered_data)
