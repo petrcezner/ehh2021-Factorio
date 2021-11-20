@@ -3,10 +3,9 @@ from typing import Iterable, List, Tuple
 from ax.service.ax_client import AxClient
 
 from factorio.ax.gp_problem import GpProblem
+from factorio.utils.data_loader import load_data, DataFactory
 from factorio.utils.hack_config import HackConfig
 
-
-problem = GpProblem()
 
 def kernel_client(trials, valid_size):
     ax_client_ = AxClient()
@@ -36,7 +35,7 @@ def kernel_client(trials, valid_size):
                 "value": trials,
             },
             {
-                "name": "train_days",
+                "name": "train_samples",
                 "type": "range",
                 "bounds": [385, 396],
                 "value_type": "int",
@@ -59,25 +58,19 @@ def kernel_client(trials, valid_size):
                 'value_type': 'str',
                 'type': 'choice',
                 'values': spectral_ker_names,
-            },
-            {
-                'name': "train_mean",
-                'value_type': 'bool',
-                'type': 'choice',
-                'values': [False],
-            },
+            }
         ],
         objective_name='maxabserr_max',
         tracking_metric_names=['lpd',
                                'rmse',
                                'maxabserr',
                                'mae',
-                               'err_last_day',
+                               'err_last_sample',
                                'lpd_min',
                                'rmse_max',
                                'mae_max',
                                'maxabserr_max',
-                               'err_last_day_max'],
+                               'err_last_sample_max'],
         minimize=True,
     )
     return ax_client_
@@ -105,13 +98,23 @@ if __name__ == '__main__':
 
     hack_config = HackConfig.from_config(args.config)
 
+    data_ = load_data(hack_config.z_case)
+    data_loader = DataFactory(data_, hack_config.data_frequency)
+
+    cv_ratios = np.linspace(hack_config.cv_ratios_start,
+                            hack_config.cv_ratios_stop,
+                            hack_config.cv_ratios_steps)
+
+    problem = GpProblem(data_loader.dset,
+                        data_loader.dset[:][0][0].size(0),
+                        cv_ratios=cv_ratios
+                        )
+
     file_name = Path(f'{hack_config.experiment_name}_{time_now.strftime("%Y%d%m%H%M%S")}.json')
     full_path = str(experiment_root / file_name)
     ax_client = kernel_client(trials=hack_config.inter_trials,
                               valid_size=hack_config.validation_size)
 
-    file_name = Path(f"{args.experiment_name}_{time_now.strftime('%Y%d%m%H%M%S')}.json")
-    full_path = str(experiment_root / file_name)
     for i in trange(hack_config.trials):
         parameters, trial_index = ax_client.get_next_trial()
         results = problem.evaluate(parameters, use_gpu=hack_config.use_gpu)
