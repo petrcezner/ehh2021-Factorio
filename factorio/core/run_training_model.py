@@ -23,7 +23,7 @@ if __name__ == '__main__':
     num_inducing = 32
     num_iter = 1000
     num_particles = 32
-    loader_batch_size = 512
+    loader_batch_size = 5012
     learn_inducing_locations = True
     slow_mode = False  # enables checkpointing and logging
     learning_rate = 0.0001

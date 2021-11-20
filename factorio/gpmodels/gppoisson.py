@@ -18,7 +18,6 @@ class RateGP(gpytorch.models.ApproximateGP):
                  inducing_points: torch.Tensor,
                  name_prefix="rate_exact_gp",
                  learn_inducing_locations=False,
-                 lb_periodicity=0,
                  kernel=None):
         self.name_prefix = name_prefix
         # Define all the variational stuff

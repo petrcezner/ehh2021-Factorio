@@ -5,6 +5,7 @@ import pyro.distributions as dist
 import torch
 from torch.distributions.poisson import Poisson
 from torch.utils.data import TensorDataset, DataLoader
+from factorio.gpmodels.gppoisson import RateGP
 from factorio.utils.helpers import percentiles_from_samples
 import pyro
 import gpytorch
@@ -13,12 +14,11 @@ from gpytorch.variational import VariationalStrategy
 from tqdm import trange
 
 
-class RateGP(gpytorch.models.ApproximateGP):
+class LogNormGP(RateGP):
     def __init__(self,
                  inducing_points: torch.Tensor,
                  name_prefix="rate_exact_gp",
                  learn_inducing_locations=False,
-                 lb_periodicity=0,
                  kernel=None):
         self.name_prefix = name_prefix
         # Define all the variational stuff

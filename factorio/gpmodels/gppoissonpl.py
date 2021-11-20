@@ -20,7 +20,6 @@ class RateGPpl(LightningModule):
                  inducing_points: torch.Tensor,
                  name_prefix="mixture_gp",
                  learn_inducing_locations=False,
-                 lb_periodicity=0,
                  lr=0.01,
                  num_particles=64,
                  kernel=None):
@@ -30,7 +29,6 @@ class RateGPpl(LightningModule):
         self.gp = RateGP(inducing_points=inducing_points,
                          name_prefix=name_prefix,
                          learn_inducing_locations=learn_inducing_locations,
-                         lb_periodicity=lb_periodicity,
                          kernel=kernel)
         self.lr = lr
         self.num_particles = num_particles
