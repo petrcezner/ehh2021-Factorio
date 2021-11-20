@@ -28,11 +28,13 @@ class DataFactory:
     def __init__(self, data, data_frequency, hospital, teams, data_folder, dtype=torch.float):
         self.teams = teams
         self.hospital = hospital
+        self.data_frequency = data_frequency
+        self.covid_source = r'https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19/'
         self.data_folder = data_folder
         self.scaler = MinMaxScaler()
-        self.dset = self.create_timestamp(data, data_frequency, dtype=dtype)
+        self.dset = self.create_timestamp(data, dtype=dtype)
 
-    def create_timestamp(self, data, data_frequency, dtype=torch.float):
+    def create_timestamp(self, data, dtype=torch.float):
         data_ikem = data[data['destination__hospitalId'] == f'hospital:{self.hospital}']
         cols = ['createdTs', 'closedTs', 'ambulanceLocation__first__dispatchingEtaTs', 'dispatchingTs']
         for col in cols:
@@ -45,7 +47,7 @@ class DataFactory:
             if row['ambulanceLocation__first__dispatchingEtaTs'] is pd.NaT:
                 time_data.loc[i, 'ambulanceLocation__first__dispatchingEtaTs'] = time_data.loc[i, 'dispatchingTs']
         time_data.set_index('ambulanceLocation__first__dispatchingEtaTs', inplace=True, drop=True)
-        hour_rate = time_data.resample(f'{data_frequency}min').count().loc[datetime.datetime(2020, 8, 31, 16):]
+        hour_rate = time_data.resample(f'{self.data_frequency}min').count().loc[datetime.datetime(2020, 8, 31, 16):]
         end_date = pd.to_datetime(hour_rate.index.values[-1])
         x = self.load_weather(start_date=datetime.datetime(2020, 8, 31, 16),
                               end_date=end_date).to(dtype=dtype)
@@ -74,6 +76,7 @@ class DataFactory:
         google = google[start_date:end_date]
         # apple = pd.DataFrame.from_dict(apple_m.get_mobility(), orient='index')
         # waze = pd.DataFrame.from_dict(waze_m.get_mobility(), orient='index')
+        incidence = self.__load_incidence(start_date, end_date)
         selected_data.insert(6, 'football', football.values)
         selected_data.insert(7,
                              'retail_and_recreation_percent_change_from_baseline',
@@ -81,9 +84,17 @@ class DataFactory:
         selected_data.insert(8,
                              'residential_percent_change_from_baseline',
                              google['residential_percent_change_from_baseline'].values)
+        selected_data.insert(9, 'incidence_7_100000', incidence['incidence_7_100000'].values)
         self.scaler.fit(selected_data.values)
         transformed_values = self.scaler.transform(selected_data.values)
         return torch.as_tensor(transformed_values)
+
+    def __load_incidence(self, start_date, end_date):
+        data_incidence = pd.read_csv(rf'{self.covid_source}incidence-7-14-cr.csv')
+        data_incidence.dropna(inplace=True)
+        data_incidence['datum'] = pd.to_datetime(data_incidence['datum'])
+        data_incidence.set_index('datum', drop=True, inplace=True)
+        return data_incidence.resample(f'{self.data_frequency}min').ffill()[start_date:end_date]
 
     def load_football(self, start_date, end_date):
         football = Football(self.teams)
