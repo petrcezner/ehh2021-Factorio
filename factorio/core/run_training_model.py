@@ -20,10 +20,10 @@ if __name__ == '__main__':
 
     # Move to config at some point
     dtype = torch.float
-    num_inducing = 32
+    num_inducing = 64
     num_iter = 1000
     num_particles = 32
-    loader_batch_size = 5012
+    loader_batch_size = 15000
     learn_inducing_locations = True
     slow_mode = False  # enables checkpointing and logging
     learning_rate = 0.0001
@@ -56,7 +56,7 @@ if __name__ == '__main__':
         for minimum, maximum in zip(X_mins, X_maxs)
     ], dim=-1)
     loader = DataLoader(
-        dfactory.dset,
+        dfactory.dset[:-100],
         batch_size=loader_batch_size,
         shuffle=True
     )
