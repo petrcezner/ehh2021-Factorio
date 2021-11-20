@@ -1,4 +1,3 @@
-import configparser
 import datetime
 from pathlib import Path
 
@@ -7,16 +6,13 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.distributions.poisson import Poisson
-from torch.utils.data import DataLoader
-from torch.utils.data import TensorDataset
-from factorio.gpmodels.gppoissonpl import RateGPpl, fit
+from factorio.gpmodels.gppoissonpl import RateGPpl
 from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
+import argparse
 
 
 if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    import argparse
 
     # Move to config at some point
     dtype = torch.float
@@ -61,7 +57,7 @@ if __name__ == '__main__':
         output = model(test_x)
 
     # Similarly get the 5th and 95th percentiles
-    samples = output(torch.Size([1000]))
+    samples = output(torch.Size([1000])).exp()
     lower, fn_mean, upper = percentiles_from_samples(samples)
 
     y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(

@@ -13,9 +13,11 @@ from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from factorio.gpmodels.gppoisson import RateGP
 from pathlib import Path
+from factorio.gpmodels.gplognorm import LogNormGP
+from factorio.gpmodels.gppoissonpl import RateGPpl
 
 
-class RateGPpl(LightningModule):
+class LogNormGPpl(RateGPpl):
     def __init__(self,
                  inducing_points: torch.Tensor,
                  name_prefix="mixture_gp",
@@ -44,7 +46,7 @@ class RateGPpl(LightningModule):
     #     return self.gp.predict(X)
 
     def configure_optimizers(self):
-        optimizer = pyro.optim.Adam({"lr": 0.01})
+        optimizer = pyro.optim.Adam({"lr": self.lr})
         elbo = pyro.infer.TraceGraph_ELBO(
             num_particles=self.num_particles, vectorize_particles=True, retain_graph=True)
         self.svi = pyro.infer.SVI(

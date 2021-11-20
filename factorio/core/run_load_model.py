@@ -42,7 +42,10 @@ if __name__ == '__main__':
 
     hack_config = data_loader.HackConfig.from_config(args.config)
     data = data_loader.load_data(hack_config.z_case)
-    dfactory = data_loader.DataFactory(data, hack_config.data_frequency, dtype=dtype)
+    dfactory = data_loader.DataFactory(data,
+                                       hack_config.data_frequency,
+                                       teams=hack_config.teams,
+                                       dtype=dtype)
 
     X_mins, X_maxs = dfactory.get_min_max()
 
@@ -61,7 +64,7 @@ if __name__ == '__main__':
         output = model(test_x)
 
     # Similarly get the 5th and 95th percentiles
-    samples = output(torch.Size([1000]))
+    samples = output(torch.Size([1000])).exp()
     lower, fn_mean, upper = percentiles_from_samples(samples)
 
     y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(
