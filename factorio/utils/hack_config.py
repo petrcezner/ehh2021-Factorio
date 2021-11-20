@@ -4,7 +4,7 @@ from pathlib import Path
 
 class HackConfig:
     def __init__(self, z_case, data_frequency, trials, inter_trials, experiment_name, valid_size, use_gpu,
-                 cv_ratios_start, cv_ratios_stop, cv_ratios_steps, teams):
+                 cv_ratios_start, cv_ratios_stop, cv_ratios_steps, teams, data_folder, hospital):
         self.z_case = z_case
         self.data_frequency = data_frequency
         self.trials = trials
@@ -16,14 +16,18 @@ class HackConfig:
         self.cv_ratios_stop = cv_ratios_stop
         self.cv_ratios_steps = cv_ratios_steps
         self.teams = teams
+        self.data_folder = data_folder
+        self.hospital = hospital
 
     @classmethod
     def from_config(cls, config_file):
         config = configparser.ConfigParser()
         config.read(config_file)
 
-        z_case = Path(config['IKEM'].get('data_path'))
-        data_frequency = config['IKEM'].getint('data_frequency', fallback=60)
+        z_case = Path(config['HOSPITAL'].get('data_path'))
+        data_folder = Path(config['HOSPITAL'].get('data_folder'))
+        data_frequency = config['HOSPITAL'].getint('data_frequency', fallback=60)
+        hospital = config['HOSPITAL'].get('hospital')
 
         trials = config['ax'].getint('trials', fallback=10)
         inter_trials = config['ax'].getint('inter_trials', fallback=10)
@@ -51,4 +55,6 @@ class HackConfig:
                    use_gpu=use_gpu,
                    cv_ratios_start=cv_ratios_start,
                    cv_ratios_stop=cv_ratios_stop,
-                   cv_ratios_steps=cv_ratios_steps)
+                   cv_ratios_steps=cv_ratios_steps,
+                   data_folder=data_folder,
+                   hospital=hospital)

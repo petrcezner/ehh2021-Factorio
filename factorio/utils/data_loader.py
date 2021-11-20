@@ -25,13 +25,14 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
 class DataFactory:
-    def __init__(self, data, data_frequency, teams, dtype=torch.float):
+    def __init__(self, data, data_frequency, hospital, teams, dtype=torch.float):
         self.teams = teams
+        self.hospital = hospital
         self.scaler = MinMaxScaler()
         self.dset = self.create_timestamp(data, data_frequency, dtype=dtype)
 
     def create_timestamp(self, data, data_frequency, dtype=torch.float):
-        data_ikem = data[data['destination__hospitalId'] == 'hospital:MOTOL']
+        data_ikem = data[data['destination__hospitalId'] == f'hospital:{self.hospital}']
         cols = ['createdTs', 'closedTs', 'ambulanceLocation__first__dispatchingEtaTs', 'dispatchingTs']
         for col in cols:
             data_ikem.loc[:, col] = pd.to_datetime(data_ikem[col])
@@ -61,9 +62,12 @@ class DataFactory:
         selected_data.insert(2, 'month', selected_data.index.month)
 
         football = self.load_football(start_date, end_date)
-        # google = pd.DataFrame.from_dict(MobilityGoogle().get_mobility(), orinet='index')
-        # apple = pd.DataFrame.from_dict(MobilityApple().get_mobility(), orinet='index')
-        # waze = pd.DataFrame.from_dict(MobilityWaze().get_mobility(), orinet='index')
+        # google_m = MobilityGoogle()
+        # apple_m = MobilityApple()
+        # waze_m = MobilityWaze()
+        # google = pd.DataFrame.from_dict(google_m.get_mobility(), orinet='index')
+        # apple = pd.DataFrame.from_dict(apple_m.get_mobility(), orinet='index')
+        # waze = pd.DataFrame.from_dict(apple.get_mobility(), orinet='index')
         selected_data.insert(6, 'football', football.values)
 
         self.scaler.fit(selected_data.values)
@@ -105,5 +109,8 @@ if __name__ == '__main__':
 
     hack_config = HackConfig.from_config(args.config)
     data_ = load_data(hack_config.z_case)
-    data_loader = DataFactory(data_, hack_config.data_frequency, teams=hack_config.teams)
+    data_loader = DataFactory(data_,
+                              hack_config.data_frequency,
+                              teams=hack_config.teams,
+                              hospital=hack_config.hospital)
     print(data_loader.get_min_max())
