@@ -22,7 +22,7 @@ if __name__ == '__main__':
     # Move to config at some point
     dtype = torch.float
     num_inducing = 64
-    num_iter = 2
+    num_iter = 500
     num_particles = 32
     loader_batch_size = 15000
     learn_inducing_locations = True
@@ -44,8 +44,7 @@ if __name__ == '__main__':
     output_path = args.output
 
     hack_config = data_loader.HackConfig.from_config(args.config)
-    data = data_loader.load_data(hack_config.z_case)
-    dfactory = data_loader.DataFactory(data,
+    dfactory = data_loader.DataFactory(None,
                                        hack_config.data_frequency,
                                        teams=hack_config.teams,
                                        hospital=hack_config.hospital,
