@@ -1,8 +1,9 @@
 import configparser
 import datetime
+import glob
 from pathlib import Path
 import warnings
-
+import dask.dataframe as dd
 from factorio.mobility.mobility_apple import MobilityApple
 from factorio.mobility.mobility_google import MobilityGoogle
 from factorio.mobility.mobility_waze import MobilityWaze
@@ -32,26 +33,19 @@ class DataFactory:
         self.covid_source = r'https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19/'
         self.data_folder = data_folder
         self.scaler = MinMaxScaler()
-        self.end_date = datetime.datetime(2021, 11, 15, 23, 0, 0)
-        self.dset = self.create_timestamp(data, dtype=dtype)
+        self.end_date = datetime.datetime(2021, 11, 15, 23, 55, 0)
+        self.start_date = datetime.datetime(2017, 1, 1, 3)
+        self.dset = self.create_timestamp(dtype=dtype)
 
-    def create_timestamp(self, data, dtype=torch.float):
-        data_ikem = data[data['destination__hospitalId'] == f'hospital:{self.hospital}']
-        cols = ['createdTs', 'closedTs', 'ambulanceLocation__first__dispatchingEtaTs', 'dispatchingTs']
-        for col in cols:
-            data_ikem.loc[:, col] = pd.to_datetime(data_ikem[col])
-        time_data = data_ikem[cols + ['ambulanceLocation__first__dispatchingEtaTs__minutes']]
-        time_data.reset_index(drop=True, inplace=True)
+    def create_timestamp(self, dtype=torch.float):
+        time_data = self.__load_ikem_data()
+
         tmp_array = np.full((time_data.shape[0], 1), 0)
         time_data.insert(0, 'cases', tmp_array)
-        for i, row in time_data.iterrows():
-            if row['ambulanceLocation__first__dispatchingEtaTs'] is pd.NaT:
-                time_data.loc[i, 'ambulanceLocation__first__dispatchingEtaTs'] = time_data.loc[i, 'dispatchingTs']
-        time_data.set_index('ambulanceLocation__first__dispatchingEtaTs', inplace=True, drop=True)
         hour_rate = time_data.resample(f'{self.data_frequency}min').count().loc[
-                    datetime.datetime(2020, 8, 31, 16):self.end_date]
+                    self.start_date:self.end_date]
         # end_date = pd.to_datetime(hour_rate.index.values[-1])
-        x = self.load_weather(start_date=datetime.datetime(2020, 8, 31, 16),
+        x = self.load_weather(start_date=self.start_date,
                               end_date=self.end_date).to(dtype=dtype)
         y = torch.as_tensor(hour_rate['cases'].values).to(dtype=dtype)
         return TensorDataset(x, y)
@@ -61,9 +55,10 @@ class DataFactory:
 
         data = historical_weather.get_temperature(start_date, end_date)
         data.fillna(0, inplace=True)
+        data = data.resample(f'{self.data_frequency}min').ffill()
         selected_data = data[['temp', 'rhum', 'pres']]
         selected_data.insert(0, 'hour', selected_data.index.hour)
-        selected_data.insert(1, 'day in month', selected_data.index.day)
+        selected_data.insert(1, 'day in week', selected_data.index.weekday)
         selected_data.insert(2, 'month', selected_data.index.month)
 
         football = self.load_football(start_date, end_date)
@@ -71,15 +66,14 @@ class DataFactory:
 
         incidence = self.__load_incidence(start_date, end_date)
         selected_data.insert(6, 'football', football.values)
-        selected_data.insert(7,
-                             'retail_and_recreation_percent_change_from_baseline',
-                             google['retail_and_recreation_percent_change_from_baseline'].values)
-        selected_data.insert(8,
-                             'residential_percent_change_from_baseline',
-                             google['residential_percent_change_from_baseline'].values)
-        selected_data.insert(9, 'waze mobilty', waze[0].values)
-        selected_data.insert(10, 'apple mobility', apple[0].values)
-        selected_data.insert(11, 'incidence_7_100000', incidence['incidence_7_100000'].values)
+        selected_data = selected_data.join(google[['retail_and_recreation_percent_change_from_baseline',
+                                                   'residential_percent_change_from_baseline']])
+        waze.columns = ['waze']
+        apple.columns = ['apple']
+        selected_data = selected_data.join(waze['waze'])
+        selected_data = selected_data.join(apple['apple'])
+        selected_data = selected_data.join(incidence['incidence_7_100000'])
+        selected_data.fillna(0, inplace=True)
         self.scaler.fit(selected_data.values)
         transformed_values = self.scaler.transform(selected_data.values)
         return torch.as_tensor(transformed_values)
@@ -108,6 +102,22 @@ class DataFactory:
         google = google.resample(f'{self.data_frequency}min').ffill()
         return google, apple, waze
 
+    def __load_ikem_data(self):
+        all_files = glob.glob(str(self.data_folder / 'ikem' / "*.xlsx"))
+        li = []
+
+        for filename in all_files:
+            df = pd.read_excel(filename)
+            df['datum a čas'] = pd.to_datetime(df['datum a čas'])
+            df.set_index('datum a čas', inplace=True)
+            li.append(df)
+        this_year = pd.read_html(str(self.data_folder / 'vypis_9074.xls'))[0]
+        this_year['datum a čas'] = pd.to_datetime(this_year['datum a čas'])
+        this_year.set_index('datum a čas', inplace=True)
+        this_year = this_year.drop('Unnamed: 8', axis=1)
+        li.append(this_year['2021-01-01':])
+        return pd.concat(li, axis=0)
+
     def __load_incidence(self, start_date, end_date):
         data_incidence = pd.read_csv(rf'{self.covid_source}incidence-7-14-cr.csv')
         data_incidence.dropna(inplace=True)
@@ -118,7 +128,7 @@ class DataFactory:
     def load_football(self, start_date, end_date):
         football = Football(self.teams)
 
-        hourly_visitors = football.get_visitors()
+        hourly_visitors = football.get_visitors(start_date, end_date)
         df = pd.DataFrame.from_dict(hourly_visitors, orient='index')
         return df.resample(f'{self.data_frequency}min').ffill()[start_date:end_date]
 
