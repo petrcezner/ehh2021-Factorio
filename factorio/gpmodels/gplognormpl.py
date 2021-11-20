@@ -109,8 +109,12 @@ class LogNormGPpl(LightningModule):
     def load_model(cls, load_path, num_particles=32):
         loaded_state_dict = torch.load(load_path)
         loaded_inducing_points = loaded_state_dict['gp.variational_strategy.inducing_points']
-        model = cls(inducing_points=loaded_inducing_points,
-                        num_particles=num_particles)
+        X_mins = torch.zeros(loaded_inducing_points.size(1))
+        X_maxs = torch.ones(loaded_inducing_points.size(1))
+        model = cls(num_inducing=loaded_inducing_points.size(0),
+                    X_mins=X_mins,
+                    X_maxs=X_maxs,
+                    num_particles=num_particles)
         model.load_state_dict(loaded_state_dict)
         return model
 

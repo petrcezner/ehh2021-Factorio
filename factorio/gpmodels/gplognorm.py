@@ -52,7 +52,8 @@ class LogNormGP(gpytorch.models.pyro.PyroGP):
         if kernel is None:
             # kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.MaternKernel(nu=2.5, ard_num_dims=ard_num_dims))
             kernel = gpytorch.kernels.ScaleKernel(
-                gpytorch.kernels.RBFKernel(
+                gpytorch.kernels.MaternKernel(
+                    nu=0.5,
                     ard_num_dims=ard_num_dims
                 ),
                 ard_num_dims=ard_num_dims

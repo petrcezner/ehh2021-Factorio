@@ -22,12 +22,12 @@ if __name__ == '__main__':
     # Move to config at some point
     dtype = torch.float
     num_inducing = 64
-    num_iter = 500
+    num_iter = 2
     num_particles = 32
     loader_batch_size = 15000
     learn_inducing_locations = True
     slow_mode = False  # enables checkpointing and logging
-    learning_rate = 0.1
+    learning_rate = 0.001
 
     time_now = datetime.datetime.utcnow()
     parser = argparse.ArgumentParser()

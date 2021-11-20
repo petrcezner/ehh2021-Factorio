@@ -9,6 +9,7 @@ import torch
 from torch.distributions.poisson import Poisson
 from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset
+from factorio.gpmodels.gplognormpl import LogNormGPpl
 from factorio.gpmodels.gppoissonpl import RateGPpl, fit
 from factorio.utils import data_loader
 from factorio.utils.helpers import percentiles_from_samples
@@ -56,7 +57,7 @@ if __name__ == '__main__':
         for minimum, maximum in zip(X_mins, X_maxs)
     ], dim=-1)
 
-    model = RateGPpl.load_model(load_path)
+    model = LogNormGPpl.load_model(load_path)
     
     test_x = dfactory.dset[-1000:][0]
     Y = dfactory.dset[-1000:][1]
@@ -66,8 +67,8 @@ if __name__ == '__main__':
         output = model(test_x)
 
     # Similarly get the 5th and 95th percentiles
-    samples = output(torch.Size([1000])).exp()
-    lower, fn_mean, upper = percentiles_from_samples(samples)
+    samples = model.gp.likelihood(output.mean).rsample(torch.Size([1000]))
+    lower, fn_mean, upper = percentiles_from_samples(samples, [.25, 0.5, 0.75])
 
     y_sim_lower, y_sim_mean, y_sim_upper = percentiles_from_samples(
         Poisson(samples.exp()).sample())
