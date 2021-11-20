@@ -12,12 +12,20 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Core",
+            "name": "Train model",
             "type": "python",
             "request": "launch",
             "program": "factorio/core/main.py",
             "console": "integratedTerminal",
-            "args": ["-c", "mnt/config.ini"]
+            "args": ["-c", "mnt/config.ini", "-o", "mnt/mdl.pth"]
+        },
+        {
+            "name": "Load model",
+            "type": "python",
+            "request": "launch",
+            "program": "factorio/core/run_load_model.py",
+            "console": "integratedTerminal",
+            "args": ["-c", "mnt/config.ini", "-i", "mnt/mdl.pth"]
         }
     ]
 }
