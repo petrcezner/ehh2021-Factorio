@@ -68,7 +68,6 @@ if __name__ == '__main__':
     
     torch.save(model.state_dict(), output_path)
 
-
     test_x = dfactory.dset[-1000:][0]
     Y = dfactory.dset[-1000:][1]
     model.eval()

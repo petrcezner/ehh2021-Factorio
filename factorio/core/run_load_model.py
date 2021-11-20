@@ -20,7 +20,7 @@ if __name__ == '__main__':
 
     # Move to config at some point
     dtype = torch.float
-    num_inducing = 256
+    num_inducing = 32
     num_iter = 1000
     num_particles = 32
     loader_batch_size = 512
@@ -50,9 +50,11 @@ if __name__ == '__main__':
         torch.linspace(minimum, maximum, num_inducing, dtype=dtype)
         for minimum, maximum in zip(X_mins, X_maxs)
     ], dim=-1)
+    
+    loaded_state_dict = torch.load(load_path)
+    loaded_inducing_points = loaded_state_dict['gp.variational_strategy.inducing_points']
     model = RateGPpl(inducing_points=my_inducing_pts,
                      num_particles=num_particles)
-    loaded_state_dict = torch.load(load_path)
     model.load_state_dict(loaded_state_dict)
     
     test_x = dfactory.dset[-1000:][0]
